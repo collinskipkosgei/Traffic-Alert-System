@@ -1,0 +1,222 @@
+.toll-payment {
+  min-height: 100vh;
+  background: #f5f5f5;
+  padding: 2rem;
+  color: #111827;
+}
+
+.payment-container {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.payment-header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.payment-header h1 {
+  font-size: 2rem;
+  color: #111827;
+  margin-bottom: 0.5rem;
+}
+
+.payment-header p {
+  color: #4b5563;
+}
+
+.payment-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+}
+
+.toll-selection h2,
+.payment-form h2 {
+  margin-bottom: 1rem;
+  color: #111827;
+}
+
+.toll-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.toll-card {
+  background: white;
+  padding: 1rem;
+  border-radius: 10px;
+  border: 2px solid #e5e7eb;
+  cursor: pointer;
+  transition: all 0.3s;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.toll-card:hover {
+  transform: translateX(5px);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.toll-card.selected {
+  border-color: #667eea;
+  background: #f8f9ff;
+}
+
+.toll-info h3 {
+  font-size: 1rem;
+  margin-bottom: 0.5rem;
+  color: #111827;
+}
+
+.toll-rate {
+  font-size: 1.2rem;
+  font-weight: bold;
+  color: #667eea;
+}
+
+.check-icon {
+  color: #27ae60;
+  font-size: 1.2rem;
+}
+
+.payment-form {
+  background: white;
+  padding: 2rem;
+  border-radius: 15px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.form-group {
+  margin-bottom: 1rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: #4b5563;
+  font-weight: 600;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 10px;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 1rem;
+  transition: border-color 0.3s;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.payment-summary {
+  margin: 1.5rem 0;
+  padding: 1rem;
+  background: #f8f9fa;
+  border-radius: 10px;
+}
+
+.summary-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.5rem 0;
+}
+
+.summary-row.total {
+  border-top: 1px solid #ddd;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  font-weight: bold;
+  font-size: 1.1rem;
+}
+
+.total-amount {
+  color: #667eea;
+  font-size: 1.2rem;
+}
+
+.pay-button {
+  width: 100%;
+  padding: 12px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transition: transform 0.3s;
+}
+
+.pay-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+}
+
+.pay-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.payment-success {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: #d4edda;
+  border-radius: 10px;
+  text-align: center;
+}
+
+.success-icon {
+  color: #27ae60;
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+}
+
+.payment-success h3 {
+  color: #155724;
+  margin-bottom: 0.5rem;
+}
+
+.payment-success p {
+  color: #155724;
+  margin: 0.25rem 0;
+}
+
+@media (max-width: 768px) {
+  .payment-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .toll-payment {
+    padding: 1rem;
+  }
+}
+
