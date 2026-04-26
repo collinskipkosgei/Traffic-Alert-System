@@ -27,3 +27,6 @@ npm-debug.log*
 # Windows reserved names
 nul
 NUL
+
+.vercel
+.env*.local
