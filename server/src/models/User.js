@@ -12,6 +12,15 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Password is required']
   },
+  role: {
+    type: String,
+    enum: ['user', 'admin'],
+    default: 'user'
+  },
+  suspended: {
+    type: Boolean,
+    default: false
+  },
   resetPasswordToken: {
     type: String,
     default: null

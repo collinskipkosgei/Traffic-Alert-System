@@ -6,13 +6,30 @@ export type TrafficAlert = {
   location: string
   severity: AlertSeverity
   description: string
+  latitude?: number | null
+  longitude?: number | null
+  distanceKm?: number
+  status?: 'pending' | 'approved' | 'rejected'
   createdAt: string
+  updatedAt?: string
+  expiresAt?: string
 }
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000'
 
+function buildApiUrl(path: string): string {
+  const base = String(API_URL).replace(/\/+$/, '')
+  // Handle both base forms:
+  // - http://host:port
+  // - http://host:port/api
+  if (base.endsWith('/api') && path.startsWith('/api/')) {
+    return `${base}${path.slice('/api'.length)}`
+  }
+  return `${base}${path}`
+}
+
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
+  const res = await fetch(buildApiUrl(path), {
     ...init,
     headers: {
       'Content-Type': 'application/json',
@@ -22,7 +39,16 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!res.ok) {
     const text = await res.text().catch(() => '')
-    throw new Error(`Request failed (${res.status}): ${text || res.statusText}`)
+    if (text) {
+      try {
+        const parsed = JSON.parse(text) as { error?: string; message?: string }
+        throw new Error(parsed.error || parsed.message || res.statusText)
+      } catch {
+        throw new Error(text || res.statusText)
+      }
+    }
+
+    throw new Error(res.statusText)
   }
 
   return (await res.json()) as T
@@ -41,6 +67,8 @@ export async function createAlert(input: {
   location: string
   severity: AlertSeverity
   description: string
+  latitude?: number
+  longitude?: number
 }): Promise<{ alert: TrafficAlert }> {
   return apiFetch('/api/alerts', {
     method: 'POST',
@@ -48,7 +76,53 @@ export async function createAlert(input: {
   })
 }
 
-export type AuthUser = { _id: string; email: string }
+export async function updateAlert(
+  id: string,
+  input: {
+    title: string
+    location: string
+    severity: AlertSeverity
+    description: string
+    latitude?: number
+    longitude?: number
+  },
+): Promise<{ alert: TrafficAlert }> {
+  return apiFetch(`/api/alerts/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  })
+}
+
+export async function deletePublicAlert(id: string): Promise<{ message: string }> {
+  return apiFetch(`/api/alerts/${id}`, {
+    method: 'DELETE',
+  })
+}
+
+export async function getNearbyAlerts(input: {
+  latitude: number
+  longitude: number
+  radiusKm?: number
+}): Promise<{ alerts: TrafficAlert[]; radiusKm: number }> {
+  const radiusKm = input.radiusKm ?? 5
+  return apiFetch(
+    `/api/alerts/nearby?latitude=${encodeURIComponent(input.latitude)}&longitude=${encodeURIComponent(
+      input.longitude,
+    )}&radiusKm=${encodeURIComponent(radiusKm)}`,
+  )
+}
+
+export type AuthUser = { _id: string; email: string; role: 'user' | 'admin' }
+
+export type PublicPaymentReview = {
+  checkoutRequestID: string
+  routeTo: string
+  status?: 'completed' | 'failed' | 'pending'
+  rating?: number
+  review?: string
+  reviewedAt?: string
+  reviewerName?: string
+}
 
 export async function register(input: {
   email: string
@@ -66,6 +140,16 @@ export async function login(input: {
   password: string
 }): Promise<{ token: string; user: AuthUser }> {
   return apiFetch('/api/auth/login', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
+export async function adminLogin(input: {
+  email: string
+  password: string
+}): Promise<{ token: string; user: AuthUser }> {
+  return apiFetch('/api/auth/admin/login', {
     method: 'POST',
     body: JSON.stringify(input),
   })
@@ -98,3 +182,188 @@ export async function resetPassword(input: {
   })
 }
 
+export async function getPublicPaymentReviews(limit = 12): Promise<{ reviews: PublicPaymentReview[] }> {
+  return apiFetch(`/api/payment/reviews?limit=${encodeURIComponent(limit)}`)
+}
+
+export type AdminUser = {
+  _id: string
+  email: string
+  role: 'user' | 'admin'
+  suspended: boolean
+  createdAt: string
+}
+
+export type AdminStats = {
+  totalAlerts: number
+  pendingAlerts: number
+  todayAlerts: number
+  weekAlerts: number
+  totalUsers: number
+  activeUsers: number
+  dailyCounts: { date: string; count: number }[]
+  weeklySignups: { week: string; count: number }[]
+  topLocations: { location: string; count: number }[]
+}
+
+export type AppSettings = {
+  alertRadiusKm: number
+  severityLevels: { low: boolean; medium: boolean; high: boolean }
+}
+
+export async function getPendingAlerts(token: string): Promise<{ alerts: TrafficAlert[] }> {
+  return apiFetch('/api/admin/alerts/pending', {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+}
+
+export async function approveAlert(token: string, id: string): Promise<{ alert: TrafficAlert }> {
+  return apiFetch(`/api/admin/alerts/${id}/approve`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  })
+}
+
+export async function rejectAlert(token: string, id: string): Promise<{ alert: TrafficAlert }> {
+  return apiFetch(`/api/admin/alerts/${id}/reject`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  })
+}
+
+export async function deleteAlert(token: string, id: string): Promise<{ message: string }> {
+  return apiFetch(`/api/admin/alerts/${id}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  })
+}
+
+export async function getAdminUsers(token: string): Promise<{ users: AdminUser[] }> {
+  return apiFetch('/api/admin/users', {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+}
+
+export async function updateUserRole(token: string, id: string, role: 'user' | 'admin'): Promise<{ user: AdminUser }> {
+  return apiFetch(`/api/admin/users/${id}/role`, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ role }),
+  })
+}
+
+export async function updateUserSuspend(token: string, id: string, suspended: boolean): Promise<{ user: AdminUser }> {
+  return apiFetch(`/api/admin/users/${id}/suspend`, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ suspended }),
+  })
+}
+
+export async function getAdminStats(token: string): Promise<AdminStats> {
+  return apiFetch('/api/admin/stats', {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+}
+
+export async function getSettings(token: string): Promise<{ settings: AppSettings }> {
+  return apiFetch('/api/admin/settings', {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+}
+
+export async function updateSettings(token: string, body: Partial<AppSettings>): Promise<{ settings: AppSettings }> {
+  return apiFetch('/api/admin/settings', {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+}
+
+export type ActivityLog = {
+  _id: string
+  actorEmail: string
+  action: string
+  targetType: string
+  details: string
+  createdAt: string
+}
+
+export async function getActivityFeed(token: string): Promise<{ logs: ActivityLog[] }> {
+  return apiFetch('/api/admin/activity', {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+}
+
+export type SystemHealth = {
+  checks: {
+    database: 'healthy' | 'unhealthy' | 'not_configured'
+    googleMaps: 'healthy' | 'unhealthy' | 'not_configured'
+    weather: 'healthy' | 'unhealthy' | 'not_configured'
+    mpesa: 'healthy' | 'unhealthy' | 'not_configured'
+  }
+}
+
+export async function getSystemHealth(token: string): Promise<SystemHealth> {
+  return apiFetch('/api/admin/health', {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+}
+
+export async function approveAllAlerts(token: string): Promise<{ message: string }> {
+  return apiFetch('/api/admin/alerts/approve-all', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  })
+}
+
+export async function exportAlertsCSV(token: string): Promise<Blob> {
+  const res = await fetch(buildApiUrl('/api/admin/alerts/export'), {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!res.ok) throw new Error(await res.text())
+  return res.blob()
+}
+
+export async function sendTestNotification(token: string): Promise<{ status: string; message: string }> {
+  return apiFetch('/api/admin/test-notification', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  })
+}
+
+export interface PaymentSummary {
+  totalAmount: number
+  totalCount: number
+  averagePayment: number
+  methodBreakdown: Record<string, { count: number; amount: number }>
+  period: { startDate: string | null; endDate: string | null }
+}
+
+export async function getPaymentsSummary(
+  token: string,
+  startDate?: string,
+  endDate?: string,
+): Promise<PaymentSummary> {
+  const params = new URLSearchParams()
+  if (startDate) params.append('startDate', startDate)
+  if (endDate) params.append('endDate', endDate)
+  const query = params.toString()
+  const url = `/api/admin/payments/summary${query ? '?' + query : ''}`
+  return apiFetch(url, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${token}` },
+  })
+}
+
+export async function exportPaymentsPDF(token: string, startDate?: string, endDate?: string): Promise<Blob> {
+  const params = new URLSearchParams()
+  if (startDate) params.append('startDate', startDate)
+  if (endDate) params.append('endDate', endDate)
+  const query = params.toString()
+  const res = await fetch(buildApiUrl(`/api/admin/payments/report/pdf${query ? '?' + query : ''}`), {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!res.ok) throw new Error(await res.text())
+  return res.blob()
+}

@@ -11,15 +11,21 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@ngrok/ngrok": "^1.7.0",
     "bcrypt": "^6.0.0",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
     "dotenv": "^17.4.1",
     "express": "^5.2.1",
+    "joi": "^17.13.3",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.4.1",
     "ngrok": "^5.0.0-beta.2",
+    "nodemailer": "^6.10.1",
     "nodemon": "^3.1.14",
-    "unirest": "^0.6.0"
+    "pdfkit": "^0.13.0",
+    "unirest": "^0.6.0",
+    "uuid": "^11.1.0",
+    "winston": "^3.17.0"
   }
 }

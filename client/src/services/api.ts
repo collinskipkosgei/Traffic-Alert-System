@@ -53,6 +53,59 @@ export const paymentService = {
   checkStatus: (transactionId: string) => api.get(`/payment/status/${transactionId}`),
   getHistory: () => api.get('/payment/history'),
   getTollRates: () => api.get('/payment/toll-rates'),
+  recordPayment: (paymentData: unknown) => api.post('/payment/record', paymentData),
+  submitReview: (reviewData: unknown) => api.post('/payment/review', reviewData),
+  getSummary: () => api.get('/payment/summary'),
+}
+
+export const mpesaService = {
+  stkPush: (data: {
+    phoneNumber: string
+    amount: number
+    accountReference?: string
+    transactionDesc?: string
+    paymentDetails?: {
+      tollId: string
+      tollName: string
+      vehicleRegistration: string
+      routeFrom: string
+      routeTo: string
+      distanceKm: number
+    }
+  }) => api.post('/mpesa/stkpush', data),
+  checkStatus: (checkoutRequestID: string) =>
+    api.post('/mpesa/status', { checkoutRequestID }),
+}
+
+export const locationService = {
+  heartbeat: (payload?: { latitude?: number; longitude?: number }) =>
+    api.post('/location/heartbeat', payload || {}),
+  setOffline: () => api.post('/location/offline', {}),
+  update: (payload: {
+    latitude: number
+    longitude: number
+    accuracy?: number
+    speed?: number | null
+    heading?: number | null
+    isActive?: boolean
+  }) => api.post('/location/update', payload),
+  getMyLatest: () => api.get('/location/me/latest'),
+  getMyHistory: (limit = 50) => api.get('/location/me/history', { params: { limit } }),
+  getActiveDrivers: (minutes = 10) => api.get('/location/active', { params: { minutes } }),
+  optimizeRoute: (payload: {
+    destination: { latitude: number; longitude: number }
+    origin?: { latitude: number; longitude: number }
+    preference?: 'fastest' | 'cheapest'
+  }) => api.post('/location/optimize-route', payload),
+  broadcast: (message: string, minutes?: number) =>
+    api.post(`/location/broadcast${minutes ? `?minutes=${minutes}` : ''}`, { message }),
+  getMessages: (limit = 20) => api.get('/location/messages', { params: { limit } }),
+  markMessageRead: (id: string) => api.post(`/location/messages/${id}/read`, {}),
+}
+
+export const sosService = {
+  send: (payload: { latitude: number; longitude: number; message?: string; phoneNumber?: string }) =>
+    api.post('/sos', payload),
 }
 
 export default api

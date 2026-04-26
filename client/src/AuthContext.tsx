@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { AuthUser } from './api'
-import { getMe, login, register } from './api'
+import { getMe, login, register, adminLogin } from './api'
+import { locationService } from './services/api'
 
 type AuthContextValue = {
   token: string | null
@@ -9,6 +10,7 @@ type AuthContextValue = {
   authError: string | null
   signOut: () => void
   doLogin: (input: { email: string; password: string }) => Promise<void>
+  doAdminLogin: (input: { email: string; password: string }) => Promise<void>
   doRegister: (input: { email: string; password: string; passwordConfirm: string }) => Promise<void>
 }
 
@@ -49,6 +51,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setLoading(false))
   }, [])
 
+  useEffect(() => {
+    if (!token || !user) return
+
+    const sendHeartbeat = () => {
+      void locationService.heartbeat().catch(() => {
+        // Heartbeat is best-effort to keep active driver status updated.
+      })
+    }
+
+    sendHeartbeat()
+    const intervalId = window.setInterval(sendHeartbeat, 30000)
+    const onFocus = () => sendHeartbeat()
+    window.addEventListener('focus', onFocus)
+
+    return () => {
+      window.clearInterval(intervalId)
+      window.removeEventListener('focus', onFocus)
+    }
+  }, [token, user?._id])
+
   const value = useMemo<AuthContextValue>(
     () => ({
       token,
@@ -56,6 +78,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loading,
       authError,
       signOut: () => {
+        void locationService.setOffline().catch(() => {
+          // Best-effort call to mark driver offline.
+        })
         localStorage.removeItem(TOKEN_KEY)
         localStorage.removeItem(LEGACY_TOKEN_KEY)
         setToken(null)
@@ -65,6 +90,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       async doLogin(input) {
         setAuthError(null)
         const res = await login(input)
+        localStorage.setItem(TOKEN_KEY, res.token)
+        localStorage.setItem(LEGACY_TOKEN_KEY, res.token)
+        setToken(res.token)
+        setUser(res.user)
+      },
+      async doAdminLogin(input) {
+        setAuthError(null)
+        const res = await adminLogin(input)
         localStorage.setItem(TOKEN_KEY, res.token)
         localStorage.setItem(LEGACY_TOKEN_KEY, res.token)
         setToken(res.token)

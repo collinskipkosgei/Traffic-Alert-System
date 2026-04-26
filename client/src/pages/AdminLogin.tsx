@@ -1,46 +1,39 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../AuthContext'
 
-export default function Login() {
+export default function AdminLogin() {
   const navigate = useNavigate()
-  const location = useLocation()
-  const { doLogin, authError, loading: sessionLoading, user } = useAuth()
+  const { doAdminLogin, authError, loading: sessionLoading, user, signOut } = useAuth()
   const [submitting, setSubmitting] = useState(false)
+  const [allowSessionClear, setAllowSessionClear] = useState(false)
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const from = (() => {
-    const raw = (location.state as { from?: string } | null)?.from
-    if (
-      typeof raw === 'string' &&
-      raw.startsWith('/') &&
-      raw !== '/login' &&
-      raw !== '/register' &&
-      raw !== '/forgot-password' &&
-      raw !== '/reset-password'
-    ) {
-      return raw
-    }
-    return '/dashboard'
-  })()
-
   useEffect(() => {
-    if (user) {
-      navigate(from, { replace: true })
+    if (user?.role === 'admin') {
+      navigate('/admin', { replace: true })
+      return
     }
-  }, [user, from, navigate])
+
+    if (user?.role === 'user') {
+      setError('A regular user is signed in. Please sign out before accessing admin login.')
+      return
+    }
+
+    setError(null)
+  }, [user, navigate])
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
     setError(null)
     setSubmitting(true)
     try {
-      await doLogin({ email, password })
-      navigate(from, { replace: true })
+      await doAdminLogin({ email, password })
+      // AuthContext will update user; useEffect above handles redirect
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed')
     } finally {
@@ -56,16 +49,51 @@ export default function Login() {
     )
   }
 
+  if (user?.role === 'user' && !allowSessionClear) {
+    return (
+      <div className="card" style={{ maxWidth: 560, margin: '0 auto' }}>
+        <div style={{ fontWeight: 800, fontSize: 20, marginBottom: 8 }}>
+          Admin Login
+        </div>
+        <div className="muted" style={{ fontSize: 14, marginBottom: 16 }}>
+          A regular user is currently signed in. To access admin login, sign out first.
+        </div>
+        <button
+          className="btn"
+          type="button"
+          onClick={() => {
+            signOut()
+            setAllowSessionClear(true)
+            window.location.replace('/')
+          }}
+          style={{ marginBottom: 12 }}
+        >
+          Sign out and continue to admin login
+        </button>
+        <button
+          className="btn btnDanger"
+          type="button"
+          onClick={() => navigate('/dashboard')}
+        >
+          Return to dashboard
+        </button>
+      </div>
+    )
+  }
+
   return (
     <div className="card" style={{ maxWidth: 560, margin: '0 auto' }}>
-      <div className="muted" style={{ fontWeight: 800 }}>
-        Sign In
+      <div style={{ fontWeight: 800, fontSize: 20, marginBottom: 8 }}>
+        Admin Login
+      </div>
+      <div className="muted" style={{ fontSize: 14, marginBottom: 12 }}>
+        Traffic Alert System — Administration
       </div>
 
       <form onSubmit={onSubmit} style={{ marginTop: 14, display: 'grid', gap: 12 }}>
         <label className="field">
-          <span className="muted">Email</span>
-          <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
+          <span className="muted">Admin Email</span>
+          <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="admin@example.com" />
         </label>
 
         <label className="field">
@@ -112,7 +140,7 @@ export default function Login() {
         </label>
 
         <button className="btn" type="submit" disabled={submitting} style={{ opacity: submitting ? 0.7 : 1 }}>
-          {submitting ? 'Signing in...' : 'Sign In'}
+          {submitting ? 'Signing in...' : 'Admin Sign In'}
         </button>
 
         {authError ? <div style={{ color: '#fca5a5', fontWeight: 700 }}>{authError}</div> : null}
@@ -120,7 +148,6 @@ export default function Login() {
       </form>
 
       <div className="muted" style={{ marginTop: 14 }}>
-        {' '}
         <a
           href="/register"
           onClick={(e) => {
@@ -133,7 +160,6 @@ export default function Login() {
         </a>
       </div>
       <div className="muted" style={{ marginTop: 10 }}>
-        {' '}
         <a
           href="/forgot-password"
           onClick={(e) => {
@@ -160,4 +186,3 @@ export default function Login() {
     </div>
   )
 }
-
