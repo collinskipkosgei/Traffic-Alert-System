@@ -44,10 +44,10 @@ router.post('/update', requireAuth, async (req, res, next) => {
 
 router.post('/heartbeat', requireAuth, async (req, res, next) => {
   try {
-    const { latitude, longitude } = req.body ?? {}
+    let { lat, lng, latitude, longitude, speed } = req.body ?? {}
 
-    let lat = typeof latitude === 'number' ? latitude : null
-    let lng = typeof longitude === 'number' ? longitude : null
+    if (typeof lat !== 'number') lat = typeof latitude === 'number' ? latitude : null
+    if (typeof lng !== 'number') lng = typeof longitude === 'number' ? longitude : null
 
     if (lat == null || lng == null) {
       const latest = await DriverLocation.findOne({ userId: req.user._id }).sort({ createdAt: -1 })
@@ -58,17 +58,18 @@ router.post('/heartbeat', requireAuth, async (req, res, next) => {
     }
 
     if (lat == null || lng == null) {
-      // Fallback to Nairobi CBD if no location was ever shared yet.
       lat = -1.2921
       lng = 36.8219
     }
+
+    const normalizedSpeed = typeof speed === 'number' ? speed : null
 
     const doc = await DriverLocation.create({
       userId: req.user._id,
       latitude: lat,
       longitude: lng,
       accuracy: null,
-      speed: null,
+      speed: normalizedSpeed,
       heading: null,
       isActive: true,
       source: 'heartbeat',
@@ -225,7 +226,6 @@ router.post('/optimize-route', requireAuth, async (req, res, next) => {
   }
 })
 
-// Allow both admins and regular users to broadcast messages to drivers
 router.post('/broadcast', requireAuth, async (req, res, next) => {
   try {
     const { message } = req.body ?? {}
@@ -296,4 +296,3 @@ router.post('/messages/:id/read', requireAuth, async (req, res, next) => {
 })
 
 module.exports = router
-
