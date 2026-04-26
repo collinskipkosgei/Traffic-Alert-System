@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { CircleMarker, MapContainer, Popup, TileLayer } from 'react-leaflet'
+import { CircleMarker, MapContainer, Marker, Popup, TileLayer } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import { locationService } from '../services/api'
 import { getNearbyAlerts, type TrafficAlert } from '../api'
@@ -207,7 +207,7 @@ export default function LiveLocation() {
 
       <div style={{ marginTop: 14 }} className="card">
         <div className="muted" style={{ marginBottom: 10 }}>
-          Mini Map Preview
+          Map View - Current Location & Nearby Traffic Alerts
         </div>
         {coords ? (
           <MapContainer
@@ -222,6 +222,29 @@ export default function LiveLocation() {
             <CircleMarker center={[coords.latitude, coords.longitude]} radius={10} pathOptions={{ color: '#2563eb' }}>
               <Popup>Your current location</Popup>
             </CircleMarker>
+            {nearbyAlerts
+              .filter((alert) => alert.latitude != null && alert.longitude != null)
+              .map((alert) => (
+                <CircleMarker
+                  key={alert._id}
+                  center={[alert.latitude!, alert.longitude!]}
+                  radius={8}
+                  pathOptions={{
+                    color: alert.severity === 'high' ? '#dc2626' : alert.severity === 'medium' ? '#f59e0b' : '#10b981',
+                    fillColor: alert.severity === 'high' ? '#dc2626' : alert.severity === 'medium' ? '#f59e0b' : '#10b981',
+                    fillOpacity: 0.8,
+                  }}
+                >
+                  <Popup>
+                    <div style={{ fontWeight: 'bold', marginBottom: 4 }}>{alert.title}</div>
+                    <div style={{ marginBottom: 4 }}>{alert.description}</div>
+                    <div style={{ fontSize: '12px', color: '#666' }}>
+                      {alert.location} • {alert.severity.toUpperCase()}
+                      {alert.distanceKm != null && ` • ${alert.distanceKm.toFixed(1)} km away`}
+                    </div>
+                  </Popup>
+                </CircleMarker>
+              ))}
           </MapContainer>
         ) : (
           <div className="muted">Turn on location to show map preview.</div>
