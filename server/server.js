@@ -10,11 +10,14 @@ const express = require('express')
 const cors = require('cors')
 const unirest = require('unirest')
 const NgrokLib = require('@ngrok/ngrok')
+const rateLimit = require('express-rate-limit')
+const { shouldThrottleLogin, markLoginAttempt, LOGIN_ATTEMPT_MAX } = require('./src/utils/loginAttempts')
 
 const { connectDB } = require('./src/db')
 const { getCheckoutResult, ingestSafaricomStkCallback, receiptFromCallbackItems } = require('./src/mpesaCheckoutStore')
 const Payment = require('./src/models/Payment')
 const User = require('./src/models/User')
+const mongoose = require('mongoose')
 const healthRoutes = require('./src/routes/health')
 const alertRoutes = require('./src/routes/alerts')
 const authRoutes = require('./src/routes/auth')
@@ -23,9 +26,39 @@ const locationRoutes = require('./src/routes/location')
 const adminRoutes = require('./src/routes/admin')
 
 const app = express()
-connectDB()
-app.use(cors())
 const PORT = process.env.PORT || 5000
+const loginAttemptsStore = new Map()
+
+// ========== RATE LIMITING ==========
+// Global limiter - all API endpoints
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per window
+  message: {
+    success: false,
+    error: 'Too many requests from this IP. Please try again later.'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: false,
+})
+
+// Stricter limiter for M-Pesa (prevent payment abuse)
+const mpesaLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 10, // 10 STK push attempts per hour
+  message: {
+    success: false,
+    error: 'Too many payment attempts. Please try again in an hour.'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+})
+
+// Apply global rate limit to all API routes
+app.use('/api/', globalLimiter)
+
+// ========== END RATE LIMITING ==========
 
 let mpesaAccessToken = ""
 let checkoutRequestID = ""
@@ -145,6 +178,9 @@ const stkPush = async (phoneNumber, amount, accountReference, transactionDesc) =
 // Middleware
 app.use(cors())
 app.use(express.json({ limit: '1mb' }))
+
+// Apply specific rate limits to sensitive routes
+app.use('/api/mpesa/stkpush', mpesaLimiter)
 
 app.use((req, res, next) => {
   console.log('---------------------------');
@@ -429,23 +465,41 @@ const initializeNgrok = async (retries = 3) => {
   }
 };
 
-// Start Server
+// ========== HEALTH CHECK ENDPOINT ==========
+app.get('/api/health', async (req, res) => {
+  const checks = {
+    mongo: mongoose.connection.readyState === 1,
+    mpesa: !!mpesaAccessToken,
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString()
+  };
+  const healthy = Object.values(checks).every(v => v !== false);
+  res.status(healthy ? 200 : 503).json({ 
+    status: healthy ? 'ok' : 'degraded', 
+    checks 
+  });
+});
+
+// ========== START SERVER ==========
 const startServer = async () => {
   try {
-    console.log('✅ MongoDB connected')
+    console.log("🔄 Connecting to MongoDB...");
+    await connectDB();
+    console.log("✅ MongoDB connection successful");
+
     try {
-      await getMpesaAccessToken()
+      await getMpesaAccessToken();
     } catch (e) {
-      console.warn('⚠️ M-Pesa token unavailable at startup. Traffic alerts and core APIs will still run.')
-      console.warn(`Reason: ${e.message || e}`)
+      console.warn("⚠️ M-Pesa token unavailable:", e.message);
     }
+
     setInterval(async () => {
       try {
-        await getMpesaAccessToken()
-      } catch {
-        console.warn('⚠️ Scheduled M-Pesa token refresh failed; will retry later.')
+        await getMpesaAccessToken();
+      } catch (e) {
+        console.warn("⚠️ Token refresh failed:", e.message);
       }
-    }, 30 * 60 * 1000)
+    }, 30 * 60 * 1000);
 
     if (process.env.ngrokauth) {
       await initializeNgrok();
@@ -453,7 +507,7 @@ const startServer = async () => {
       console.log('⚠️ No ngrok authtoken found. Set ngrokauth in .env to auto-start tunnel.');
     }
 
-    console.log(`🔔 M-Pesa callback URL: ${getMpesaCallbackUrl()}`)
+    console.log(`🔔 M-Pesa callback URL: ${getMpesaCallbackUrl()}`);
 
     app.listen(PORT, () => {
       console.log(`\n=================================`)
@@ -461,13 +515,19 @@ const startServer = async () => {
       console.log(`=================================`)
       console.log(`✅ Server: http://localhost:${PORT}`)
       console.log(`💳 M-Pesa: POST /api/mpesa/stkpush`)
+      console.log(`🔒 Rate Limiting: Enabled`)
+      console.log(`   - Global: 100 req/15min`)
+      console.log(`   - M-Pesa: 10 req/hour`)
+      console.log(`   - Auth: 5 req/15min`)
       console.log(`=================================\n`)
-    })
-  } catch (error) {
-    console.error('❌ Failed to start server:', error)
-    process.exit(1)
+    });
+
+  } catch (err) {
+    console.error("❌ Server startup failed");
+    console.error(err);
+    process.exit(1);
   }
-}
+};
 
 module.exports = app
 

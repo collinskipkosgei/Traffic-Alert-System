@@ -5,6 +5,7 @@ const crypto = require('crypto')
 const nodemailer = require('nodemailer')
 const User = require('../models/User')
 const { requireAuth } = require('../middleware/auth')
+const { shouldThrottleLogin, markLoginAttempt, LOGIN_ATTEMPT_MAX } = require('../utils/loginAttempts')
 
 // Email transporter
 const transporter = nodemailer.createTransport({
@@ -18,6 +19,7 @@ const transporter = nodemailer.createTransport({
 })
 
 const router = express.Router()
+const loginAttemptsStore = new Map()
 
 router.post('/register', async (req, res, next) => {
   try {
@@ -73,17 +75,29 @@ router.post('/login', async (req, res, next) => {
     }
 
     const normalizedEmail = String(email).trim().toLowerCase()
+
+    if (shouldThrottleLogin(loginAttemptsStore, normalizedEmail)) {
+      return res.status(429).json({
+        success: false,
+        error: 'Too many login attempts for this account. Please try again later.',
+      })
+    }
+
     const user = await User.findOne({ email: normalizedEmail })
     
     if (!user) {
+      markLoginAttempt(loginAttemptsStore, normalizedEmail)
       return res.status(401).json({ error: 'wrong password or username' })
     }
 
     // Check password
     const ok = await bcrypt.compare(password, user.passwordHash)
     if (!ok) {
+      markLoginAttempt(loginAttemptsStore, normalizedEmail)
       return res.status(401).json({ error: 'wrong password or username' })
     }
+
+    markLoginAttempt(loginAttemptsStore, normalizedEmail, { success: true })
 
     // Reject admin users on the user login portal
     if (user.role === 'admin') {
@@ -117,17 +131,29 @@ router.post('/admin/login', async (req, res, next) => {
     }
 
     const normalizedEmail = String(email).trim().toLowerCase()
+
+    if (shouldThrottleLogin(loginAttemptsStore, normalizedEmail)) {
+      return res.status(429).json({
+        success: false,
+        error: 'Too many login attempts for this account. Please try again later.',
+      })
+    }
+
     const user = await User.findOne({ email: normalizedEmail })
     
     if (!user) {
+      markLoginAttempt(loginAttemptsStore, normalizedEmail)
       return res.status(401).json({ error: 'wrong password or username' })
     }
 
     // Check password
     const ok = await bcrypt.compare(password, user.passwordHash)
     if (!ok) {
+      markLoginAttempt(loginAttemptsStore, normalizedEmail)
       return res.status(401).json({ error: 'wrong password or username' })
     }
+
+    markLoginAttempt(loginAttemptsStore, normalizedEmail, { success: true })
 
     // Reject non-admin users on the admin login portal
     if (user.role !== 'admin') {

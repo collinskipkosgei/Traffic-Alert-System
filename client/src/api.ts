@@ -15,23 +15,26 @@ export type TrafficAlert = {
   expiresAt?: string
 }
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+const API_URL = import.meta.env.VITE_API_URL?.replace(/\/+$/, '') || ''
 
 function buildApiUrl(path: string): string {
-  const base = String(API_URL).replace(/\/+$/, '')
-  // Handle both base forms:
-  // - http://host:port
-  // - http://host:port/api
-  if (base.endsWith('/api') && path.startsWith('/api/')) {
-    return `${base}${path.slice('/api'.length)}`
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`
+  if (!API_URL) {
+    return normalizedPath
   }
-  return `${base}${path}`
+
+  const base = String(API_URL).replace(/\/+$/, '')
+  if (base.endsWith('/api') && normalizedPath.startsWith('/api/')) {
+    return `${base}${normalizedPath.slice('/api'.length)}`
+  }
+  return `${base}${normalizedPath}`
 }
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(buildApiUrl(path), {
     ...init,
     headers: {
+      Accept: 'application/json',
       'Content-Type': 'application/json',
       ...(init?.headers ?? {}),
     },
@@ -366,4 +369,61 @@ export async function exportPaymentsPDF(token: string, startDate?: string, endDa
   })
   if (!res.ok) throw new Error(await res.text())
   return res.blob()
+}
+
+// ============================================================
+// LOCATION SERVICE
+// ============================================================
+
+export const locationService = {
+  update: async (data: {
+    latitude: number
+    longitude: number
+    accuracy?: number
+    speed?: number | null
+    heading?: number | null
+    isActive?: boolean
+  }) => {
+    const token = localStorage.getItem('token')
+
+    return apiFetch('/api/location/heartbeat', {
+      method: 'POST',
+      headers: {
+        Authorization: token ? `Bearer ${token}` : '',
+      },
+      body: JSON.stringify(data),
+    })
+  },
+
+  getMyHistory: async (limit = 10) => {
+    const token = localStorage.getItem('token')
+
+    return apiFetch(`/api/location/messages?limit=${limit}`, {
+      headers: {
+        Authorization: token ? `Bearer ${token}` : '',
+      },
+    })
+  },
+
+  optimizeRoute: async (data: {
+    destination: {
+      latitude: number
+      longitude: number
+    }
+    origin?: {
+      latitude: number
+      longitude: number
+    }
+    preference: 'fastest' | 'cheapest'
+  }) => {
+    const token = localStorage.getItem('token')
+
+    return apiFetch('/api/location/optimize-route', {
+      method: 'POST',
+      headers: {
+        Authorization: token ? `Bearer ${token}` : '',
+      },
+      body: JSON.stringify(data),
+    })
+  },
 }
