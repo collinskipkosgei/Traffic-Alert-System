@@ -21,36 +21,43 @@ const getMongoUri = () => {
   return uri.trim();
 };
 
+let cachedConnectionPromise = null;
+
 const connectDB = async () => {
-  try {
-    const mongoUri = getMongoUri();
+  if (mongoose.connection.readyState === 1) {
+    return mongoose.connection;
+  }
+  if (cachedConnectionPromise) {
+    return cachedConnectionPromise;
+  }
 
-    console.log(
-      "Connecting to:",
-      mongoUri.replace(/\/\/(.*?):(.*?)@/, "//****:****@")
-    );
+  const mongoUri = getMongoUri();
 
-    const conn = await mongoose.connect(mongoUri, {
-      serverSelectionTimeoutMS: 30000,
-      connectTimeoutMS: 30000,
-    });
+  console.log(
+    "Connecting to:",
+    mongoUri.replace(/\/\/(.*?):(.*?)@/, "//****:****@")
+  );
 
+  cachedConnectionPromise = mongoose.connect(mongoUri, {
+    serverSelectionTimeoutMS: 30000,
+    connectTimeoutMS: 30000,
+  }).then((conn) => {
     console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
-
     mongoose.connection.on("error", (err) => {
       console.error("❌ MongoDB Error:", err.message);
     });
-
     mongoose.connection.on("disconnected", () => {
       console.log("⚠️ MongoDB Disconnected");
+      cachedConnectionPromise = null;
     });
-
     return conn;
-  } catch (err) {
+  }).catch((err) => {
+    cachedConnectionPromise = null;
     console.error("❌ MongoDB Connection Failed");
-    console.error(err);
-    process.exit(1);
-  }
+    throw err;
+  });
+
+  return cachedConnectionPromise;
 };
 
 module.exports = { connectDB };

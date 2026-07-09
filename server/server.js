@@ -30,10 +30,9 @@ const PORT = process.env.PORT || 5000
 const loginAttemptsStore = new Map()
 
 // ========== RATE LIMITING ==========
-// Global limiter - all API endpoints
 const globalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per window
+  windowMs: 15 * 60 * 1000,
+  max: 100,
   message: {
     success: false,
     error: 'Too many requests from this IP. Please try again later.'
@@ -43,10 +42,9 @@ const globalLimiter = rateLimit({
   skipSuccessfulRequests: false,
 })
 
-// Stricter limiter for M-Pesa (prevent payment abuse)
 const mpesaLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: 10, // 10 STK push attempts per hour
+  windowMs: 60 * 60 * 1000,
+  max: 10,
   message: {
     success: false,
     error: 'Too many payment attempts. Please try again in an hour.'
@@ -55,7 +53,6 @@ const mpesaLimiter = rateLimit({
   legacyHeaders: false,
 })
 
-// Apply global rate limit to all API routes
 app.use('/api/', globalLimiter)
 
 // ========== END RATE LIMITING ==========
@@ -179,7 +176,6 @@ const stkPush = async (phoneNumber, amount, accountReference, transactionDesc) =
 app.use(cors())
 app.use(express.json({ limit: '1mb' }))
 
-// Apply specific rate limits to sensitive routes
 app.use('/api/mpesa/stkpush', mpesaLimiter)
 
 app.use((req, res, next) => {
@@ -189,6 +185,20 @@ app.use((req, res, next) => {
   console.log('Body:', req.body);
   console.log('---------------------------');
   next();
+});
+
+// ========== ENSURE DB CONNECTION (serverless-safe) ==========
+// Vercel imports this file as a module rather than executing it directly,
+// so connectDB() must be guaranteed to run per-request rather than only
+// inside startServer(). This awaits/reuses a cached connection.
+app.use('/api', async (req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (err) {
+    console.error('❌ DB connection middleware failed:', err.message);
+    res.status(503).json({ error: 'Database unavailable', message: err.message });
+  }
 });
 
 app.get('/', (_req, res) => {
@@ -480,7 +490,7 @@ app.get('/api/health', async (req, res) => {
   });
 });
 
-// ========== START SERVER ==========
+// ========== START SERVER (local dev only) ==========
 const startServer = async () => {
   try {
     console.log("🔄 Connecting to MongoDB...");
