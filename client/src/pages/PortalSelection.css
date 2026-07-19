@@ -1,0 +1,929 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+
+.nePage {
+  --ne-primary: #1962a3;
+  --ne-primary-dark: #0f4a7a;
+  --ne-navy: #0a2540;
+  --ne-heading: #0d2d4a;
+  --ne-muted: #8d8c8c;
+  --ne-card-bg: #eef3f8;
+  --ne-font: 'Outfit', 'Inter', sans-serif;
+
+  min-height: 100vh;
+  background: #fff;
+  color: var(--ne-muted);
+  font-family: var(--ne-font);
+}
+
+.nePage h1,
+.nePage h2,
+.nePage h3,
+.nePage h4,
+.nePage h5,
+.nePage h6 {
+  color: var(--ne-heading);
+  font-family: var(--ne-font);
+}
+
+/* ── Top hotline bar ── */
+
+.neTopBar {
+  background: var(--ne-primary);
+  color: #fff;
+  font-size: 13px;
+  padding: 8px 0;
+}
+
+.neTopBarInner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.neTopBarPhone {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #fff;
+  font-weight: 600;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--ne-font);
+  font-size: 13px;
+}
+
+.neTopBarPhone svg {
+  font-size: 14px;
+}
+
+/* ── Navbar ── */
+
+.neNav {
+  position: absolute;
+  top: 37px;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  padding: 16px 0;
+}
+
+.neNavInner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.neBrand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+}
+
+.neBrandIcon {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-size: 20px;
+}
+
+.neBrandText strong {
+  display: block;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+}
+
+.neBrandText small {
+  display: block;
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.neNavLinks {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.neNavLinks button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.9);
+  font-family: var(--ne-font);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 10px 14px;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.neNavLinks button:hover,
+.neNavLinks button.neNavActive {
+  color: #fff;
+  border-bottom-color: #fff;
+}
+
+.neNavLogin {
+  background: var(--ne-primary);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  font-family: var(--ne-font);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 12px 22px;
+  transition: background 0.15s;
+}
+
+.neNavLogin:hover {
+  background: var(--ne-primary-dark);
+}
+
+/* ── Hero ── */
+
+.neHero {
+  position: relative;
+  min-height: 88vh;
+  display: flex;
+  align-items: center;
+  background:
+    linear-gradient(90deg, rgba(10, 37, 64, 0.85) 0%, rgba(10, 37, 64, 0.55) 50%, rgba(10, 37, 64, 0.30) 100%),
+    url('/images/denys-nevozhai-7nrsVjvALnA-unsplash.jpg') center / cover no-repeat;
+}
+
+.neHeroInner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 140px 24px 100px;
+  width: 100%;
+}
+
+.neHeroTag {
+  display: block;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-bottom: 16px;
+}
+
+.neHero h1 {
+  max-width: 720px;
+  color: #fff;
+  font-size: clamp(2.4rem, 5.5vw, 4.6rem);
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  margin: 0 0 28px;
+}
+
+.neHeroCta {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--ne-primary);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  font-family: var(--ne-font);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 16px 28px;
+  transition: background 0.15s;
+}
+
+.neHeroCta:hover {
+  background: var(--ne-primary-dark);
+}
+
+.neHeroControls {
+  position: absolute;
+  bottom: 48px;
+  right: max(24px, calc((100vw - 1200px) / 2 + 24px));
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.neHeroControls button {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  font-family: var(--ne-font);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 0;
+}
+
+.neHeroControls button:hover {
+  color: #fff;
+}
+
+.neHeroDivider {
+  width: 48px;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+/* ── Section layout ── */
+
+.neContainer {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+.neSection {
+  padding: 72px 0;
+}
+
+.neSectionLabel {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--ne-primary);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: 14px;
+}
+
+.neSectionLabel::before {
+  content: '';
+  width: 36px;
+  height: 3px;
+  background: var(--ne-primary);
+  flex-shrink: 0;
+}
+
+.neSectionHead {
+  margin-bottom: 40px;
+}
+
+.neSectionHead--split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 40px;
+  align-items: start;
+}
+
+.neSectionHead h2 {
+  font-size: clamp(1.75rem, 3vw, 2.5rem);
+  font-weight: 700;
+  line-height: 1.15;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.neSectionDesc {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.75;
+  color: var(--ne-muted);
+}
+
+.neSectionHead--center {
+  text-align: center;
+  max-width: 720px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.neSectionHead--center .neSectionLabel {
+  justify-content: center;
+}
+
+.neSectionHead--center .neSectionLabel::before {
+  display: none;
+}
+
+.neSectionHead--center .neSectionLabel::after {
+  content: '';
+  width: 36px;
+  height: 3px;
+  background: var(--ne-primary);
+}
+
+/* ── Payment / feature cards ── */
+
+.nePayCards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.nePayCard {
+  background: var(--ne-card-bg);
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  padding: 28px 22px;
+  font-family: var(--ne-font);
+  transition: background 0.2s, color 0.2s, transform 0.2s;
+  min-height: 220px;
+  display: flex;
+  flex-direction: column;
+}
+
+.nePayCard:hover,
+.nePayCard--active {
+  background: var(--ne-primary);
+  transform: translateY(-2px);
+}
+
+.nePayCardIcon {
+  width: 52px;
+  height: 52px;
+  margin-bottom: 18px;
+  display: grid;
+  place-items: center;
+  font-size: 28px;
+  color: var(--ne-primary);
+}
+
+.nePayCard:hover .nePayCardIcon,
+.nePayCard--active .nePayCardIcon {
+  color: #fff;
+}
+
+.nePayCard h4 {
+  margin: 0 0 10px;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--ne-heading);
+}
+
+.nePayCard p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--ne-muted);
+}
+
+.nePayCard:hover h4,
+.nePayCard--active h4,
+.nePayCard:hover p,
+.nePayCard--active p {
+  color: #fff;
+}
+
+/* ── Info panels (rates / map style) ── */
+
+.neInfoGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.neInfoPanel {
+  border-radius: 4px;
+  overflow: hidden;
+  min-height: 280px;
+  display: flex;
+  flex-direction: column;
+}
+
+.neInfoPanel--blue {
+  background: linear-gradient(135deg, var(--ne-primary) 0%, var(--ne-primary-dark) 100%);
+  color: #fff;
+  padding: 32px;
+  justify-content: center;
+}
+
+.neInfoPanel--blue h3 {
+  color: #fff;
+  font-size: 1.4rem;
+  margin: 0 0 12px;
+  line-height: 1.25;
+}
+
+.neInfoPanel--blue p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.88);
+  line-height: 1.65;
+  font-size: 15px;
+}
+
+.neInfoPanel--map {
+  background:
+    linear-gradient(180deg, rgba(10, 37, 64, 0.15), rgba(10, 37, 64, 0.55)),
+    url('https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&w=900&q=80') center / cover;
+  padding: 28px;
+  justify-content: flex-end;
+}
+
+.neInfoPanel--map h3 {
+  color: #fff;
+  margin: 0 0 8px;
+  font-size: 1.25rem;
+}
+
+.neInfoPanel--map p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 14px;
+}
+
+/* ── Benefits banner ── */
+
+.neBenefits {
+  background: var(--ne-card-bg);
+  padding: 72px 0;
+}
+
+.neBenefitsInner {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 48px;
+  align-items: center;
+}
+
+.neBenefitsImage {
+  border-radius: 4px;
+  min-height: 320px;
+  background:
+    linear-gradient(180deg, transparent, rgba(10, 37, 64, 0.4)),
+    url('https://images.unsplash.com/photo-1449824913935-59a10b8d2000?auto=format&fit=crop&w=900&q=80') center / cover;
+}
+
+.neBenefitsContent h2 {
+  font-size: clamp(1.75rem, 3vw, 2.35rem);
+  margin: 0 0 16px;
+}
+
+.neBenefitsContent p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.75;
+}
+
+/* ── Top-up / module grid ── */
+
+.neModuleGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.neModuleCard {
+  background: #fff;
+  border: 1px solid #e5ebf2;
+  padding: 28px 22px;
+  text-align: center;
+  transition: box-shadow 0.2s, border-color 0.2s;
+}
+
+.neModuleCard:hover {
+  box-shadow: 0 8px 24px rgba(25, 98, 163, 0.12);
+  border-color: rgba(25, 98, 163, 0.25);
+}
+
+.neModuleIcon {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 16px;
+  border-radius: 50%;
+  background: var(--ne-card-bg);
+  display: grid;
+  place-items: center;
+  font-size: 22px;
+  color: var(--ne-primary);
+}
+
+.neModuleCard h3 {
+  margin: 0 0 10px;
+  font-size: 16px;
+}
+
+.neModuleCard p {
+  margin: 0 0 18px;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.neModuleLink {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--ne-primary);
+  font-family: var(--ne-font);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0;
+}
+
+.neModuleLink:hover {
+  text-decoration: underline;
+}
+
+/* ── ETC-style CTA band ── */
+
+.neInstallBand {
+  background: var(--ne-navy);
+  color: #fff;
+  padding: 64px 0;
+}
+
+.neInstallGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 48px;
+  align-items: center;
+}
+
+.neInstallGrid h2 {
+  color: #fff;
+  font-size: clamp(1.6rem, 2.5vw, 2.1rem);
+  margin: 0 0 14px;
+}
+
+.neInstallGrid > div > p {
+  margin: 0 0 24px;
+  color: rgba(255, 255, 255, 0.82);
+  line-height: 1.65;
+}
+
+.neInstallLists {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.neInstallLists ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.neInstallLists li {
+  position: relative;
+  padding-left: 22px;
+  margin-bottom: 12px;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.neInstallLists li::before {
+  content: '✓';
+  position: absolute;
+  left: 0;
+  color: #60a5fa;
+  font-weight: 700;
+}
+
+.neInstallCta {
+  display: inline-flex;
+  background: var(--ne-primary);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  font-family: var(--ne-font);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 14px 24px;
+}
+
+.neInstallCta:hover {
+  background: #1a75c0;
+}
+
+/* ── News ── */
+
+.neNewsGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+}
+
+.neNewsCard {
+  background: #fff;
+  border: 1px solid #e5ebf2;
+  overflow: hidden;
+  transition: box-shadow 0.2s;
+}
+
+.neNewsCard:hover {
+  box-shadow: 0 6px 20px rgba(10, 37, 64, 0.08);
+}
+
+.neNewsImage {
+  height: 180px;
+  background: var(--ne-card-bg) center / cover;
+}
+
+.neNewsBody {
+  padding: 22px;
+}
+
+.neNewsDate {
+  font-size: 12px;
+  color: var(--ne-primary);
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.neNewsCard h4 {
+  margin: 0 0 12px;
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+.neNewsLink {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--ne-primary);
+  font-family: var(--ne-font);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0;
+}
+
+/* ── Testimonials ── */
+
+.neTestimonials {
+  background: var(--ne-card-bg);
+  padding: 72px 0;
+}
+
+.neTestimonialGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+}
+
+.neTestimonialCard {
+  background: #fff;
+  padding: 28px;
+  border: 1px solid #e5ebf2;
+}
+
+.neTestimonialQuote {
+  margin: 0 0 20px;
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--ne-muted);
+  font-style: italic;
+}
+
+.neTestimonialAuthor strong {
+  display: block;
+  color: var(--ne-heading);
+  font-size: 14px;
+}
+
+.neTestimonialAuthor span {
+  font-size: 13px;
+  color: var(--ne-muted);
+}
+
+/* ── Footer ── */
+
+.neFooter {
+  background: var(--ne-navy);
+  color: rgba(255, 255, 255, 0.75);
+  padding: 56px 0 0;
+}
+
+.neFooterHotlines {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24px;
+  padding-bottom: 40px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  margin-bottom: 40px;
+}
+
+.neHotlineBlock h3 {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0 0 8px;
+}
+
+.neHotlineBlock a,
+.neHotlineBlock button.neHotlineNum {
+  color: #fff;
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  font-weight: 700;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  font-family: var(--ne-font);
+}
+
+.neFooterGrid {
+  display: grid;
+  grid-template-columns: 1.2fr repeat(3, 1fr);
+  gap: 32px;
+  padding-bottom: 40px;
+}
+
+.neFooterGrid h5 {
+  color: #fff;
+  font-size: 14px;
+  margin: 0 0 14px;
+}
+
+.neFooterGrid button,
+.neFooterGrid a {
+  display: block;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.65);
+  font-family: var(--ne-font);
+  font-size: 14px;
+  padding: 4px 0;
+  text-align: left;
+  text-decoration: none;
+}
+
+.neFooterGrid button:hover,
+.neFooterGrid a:hover {
+  color: #fff;
+}
+
+.neFooterBrand .neBrandIcon {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.neFooterBrand .neBrandText strong {
+  font-size: 15px;
+}
+
+.neFooterBottom {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 18px 0;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.45);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* ── Login modal (expressway styled) ── */
+
+.neLoginModal {
+  position: relative;
+  width: min(100%, 440px);
+  background: #fff;
+  padding: 36px;
+  font-family: var(--ne-font);
+}
+
+.neLoginModal .authTitle {
+  color: var(--ne-heading);
+}
+
+.neLoginModal .btnPrimary {
+  background: var(--ne-primary);
+  border-color: var(--ne-primary);
+}
+
+.neLoginModal .btnPrimary:hover {
+  background: var(--ne-primary-dark);
+}
+
+.neLoginClose {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 36px;
+  height: 36px;
+  border: 1px solid #e5ebf2;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ne-muted);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+/* ── Modal Overlay ── */
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  display: grid;
+  place-items: center;
+  z-index: 999;
+  padding: 20px;
+}
+
+/* ── Responsive ── */
+
+@media (max-width: 1024px) {
+  .nePayCards,
+  .neModuleGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .neSectionHead--split,
+  .neBenefitsInner,
+  .neInstallGrid,
+  .neInfoGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .neNewsGrid,
+  .neTestimonialGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .neFooterGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .neNavLinks {
+    display: none;
+  }
+
+  .neNav {
+    top: 37px;
+  }
+
+  .neHero h1 {
+    font-size: 2.2rem;
+  }
+
+  .neHeroControls {
+    display: none;
+  }
+
+  .nePayCards,
+  .neModuleGrid,
+  .neNewsGrid,
+  .neTestimonialGrid,
+  .neFooterGrid,
+  .neFooterHotlines,
+  .neInstallLists {
+    grid-template-columns: 1fr;
+  }
+
+  .neSection {
+    padding: 48px 0;
+  }
+
+  .modalOverlay {
+    padding: 16px;
+  }
+
+  .neLoginModal {
+    padding: 24px;
+    width: 100%;
+  }
+}

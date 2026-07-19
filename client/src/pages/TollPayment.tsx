@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
-import { FaCheckCircle, FaExclamationCircle, FaSpinner } from 'react-icons/fa'
+import { FaCheckCircle, FaExclamationCircle, FaMapMarkerAlt, FaSpinner } from 'react-icons/fa'
 import toast from 'react-hot-toast'
-import { mpesaService, paymentService } from '../services/api'
+import { locationService, mpesaService, paymentService } from '../services/api'
 import { useAuth } from '../AuthContext'
+import { addJourneySegment, formatCoordsLabel, type LatLng } from '../utils/geo'
 import './TollPayment.css'
 
 type Tx = {
@@ -163,23 +164,58 @@ export default function TollPayment() {
     paymentMethod: 'mpesa' as 'mpesa' | 'cash',
     phoneNumber: '',
     amount: '',
-    distanceKm: '',
     vehicleRegistration: '',
     route: {
       from: '',
       to: '',
     },
   })
+  const [paymentMode, setPaymentMode] = useState<'quick' | 'live'>('quick')
+  const [journeyActive, setJourneyActive] = useState(false)
+  const [trackedDistanceKm, setTrackedDistanceKm] = useState(0)
+  const [journeyOrigin, setJourneyOrigin] = useState<LatLng | null>(null)
+  const [locationError, setLocationError] = useState<string | null>(null)
+  const [startingJourney, setStartingJourney] = useState(false)
+  const lastJourneyPointRef = useRef<LatLng | null>(null)
+  const watchIdRef = useRef<number | null>(null)
   const [loading, setLoading] = useState(false)
   const [transaction, setTransaction] = useState<Tx | null>(null)
   const [ratingValue, setRatingValue] = useState(5)
   const [reviewText, setReviewText] = useState('')
 
   const tolls = [
-    { id: 'nrb_exp_1', name: 'Nairobi Expressway - Mlolongo to Westlands', baseFee: 1, perKm: 1 },
-    { id: 'nrb_exp_2', name: 'Nairobi Expressway - Westlands to Mlolongo', baseFee: 80, perKm: 18 },
-    { id: 'nrb_exp_3', name: 'Nairobi Expressway - JKIA to Westlands', baseFee: 100, perKm: 20 },
-    { id: 'msa_corr_1', name: 'Mombasa-Mariakani Corridor', baseFee: 60, perKm: 15 },
+    {
+      id: 'nrb_exp_1',
+      name: 'Nairobi Expressway - Mlolongo to Westlands',
+      baseFee: 1,
+      perKm: 1,
+      entryLabel: 'Mlolongo Entry',
+      exitLabel: 'Westlands Exit',
+    },
+    {
+      id: 'nrb_exp_2',
+      name: 'Nairobi Expressway - Westlands to Mlolongo',
+      baseFee: 80,
+      perKm: 18,
+      entryLabel: 'Westlands Entry',
+      exitLabel: 'Mlolongo Exit',
+    },
+    {
+      id: 'nrb_exp_3',
+      name: 'Nairobi Expressway - JKIA to Westlands',
+      baseFee: 100,
+      perKm: 20,
+      entryLabel: 'JKIA Entry',
+      exitLabel: 'Westlands Exit',
+    },
+    {
+      id: 'msa_corr_1',
+      name: 'Mombasa-Mariakani Corridor',
+      baseFee: 60,
+      perKm: 15,
+      entryLabel: 'Mombasa Entry',
+      exitLabel: 'Mariakani Exit',
+    },
   ]
 
   const selectedToll = useMemo(
@@ -189,10 +225,109 @@ export default function TollPayment() {
 
   const computedAmount = useMemo(() => {
     if (!selectedToll) return 0
-    const distanceKm = Number(paymentData.distanceKm)
-    if (Number.isNaN(distanceKm) || distanceKm <= 0) return selectedToll.baseFee
-    return Math.round(selectedToll.baseFee + distanceKm * selectedToll.perKm)
-  }, [selectedToll, paymentData.distanceKm])
+    if (trackedDistanceKm <= 0) return selectedToll.baseFee
+    return Math.round(selectedToll.baseFee + trackedDistanceKm * selectedToll.perKm)
+  }, [selectedToll, trackedDistanceKm])
+
+  const trackedDistanceLabel = trackedDistanceKm.toFixed(2)
+
+  useEffect(() => {
+    return () => {
+      if (watchIdRef.current != null) {
+        navigator.geolocation.clearWatch(watchIdRef.current)
+      }
+    }
+  }, [])
+
+  function stopJourneyTracking() {
+    if (watchIdRef.current != null) {
+      navigator.geolocation.clearWatch(watchIdRef.current)
+      watchIdRef.current = null
+    }
+  }
+
+  async function startJourney() {
+    if (!paymentData.tollId) {
+      toast.error('Please select a toll road first')
+      return
+    }
+    if (!('geolocation' in navigator)) {
+      toast.error('Geolocation is not supported on this device')
+      return
+    }
+
+    setStartingJourney(true)
+    setLocationError(null)
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const start: LatLng = {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        }
+        const selected = tolls.find((t) => t.id === paymentData.tollId)
+
+        setJourneyOrigin(start)
+        setTrackedDistanceKm(0)
+        lastJourneyPointRef.current = start
+        setJourneyActive(true)
+        setPaymentData((prev) => ({
+          ...prev,
+          route: {
+            from: formatCoordsLabel(start),
+            to: selected?.exitLabel || prev.route.to,
+          },
+        }))
+
+        void locationService.update({
+          latitude: start.latitude,
+          longitude: start.longitude,
+          isActive: true,
+        })
+
+        stopJourneyTracking()
+        watchIdRef.current = navigator.geolocation.watchPosition(
+          (nextPosition) => {
+            const next: LatLng = {
+              latitude: nextPosition.coords.latitude,
+              longitude: nextPosition.coords.longitude,
+            }
+
+            setTrackedDistanceKm((current) => {
+              const updated = addJourneySegment(current, lastJourneyPointRef.current, next)
+              lastJourneyPointRef.current = updated.previous
+              return updated.totalKm
+            })
+
+            void locationService.update({
+              latitude: next.latitude,
+              longitude: next.longitude,
+              isActive: true,
+            })
+          },
+          (geoError) => {
+            setLocationError(geoError.message || 'Lost GPS signal during journey')
+          },
+          { enableHighAccuracy: true, maximumAge: 3000, timeout: 15000 },
+        )
+
+        toast.success('Journey started. Distance is now tracked from your live location.')
+        setStartingJourney(false)
+      },
+      (geoError) => {
+        setLocationError(geoError.message || 'Unable to access your location')
+        toast.error('Allow location access to start your journey')
+        setStartingJourney(false)
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 },
+    )
+  }
+
+  function endJourney() {
+    stopJourneyTracking()
+    setJourneyActive(false)
+    toast.success(`Journey ended. Distance covered: ${trackedDistanceLabel} km`)
+  }
 
   useEffect(() => {
     const rows = loadHistory(user?.email)
@@ -216,7 +351,7 @@ export default function TollPayment() {
       vehicleRegistration: paymentData.vehicleRegistration,
       routeFrom: paymentData.route.from,
       routeTo: paymentData.route.to,
-      distanceKm: paymentData.distanceKm,
+      distanceKm: trackedDistanceLabel,
       paidAt,
     }
 
@@ -285,7 +420,7 @@ export default function TollPayment() {
     paymentData.vehicleRegistration,
     paymentData.route.from,
     paymentData.route.to,
-    paymentData.distanceKm,
+    trackedDistanceLabel,
   ])
 
   const formatPaidAt = (iso: string) => {
@@ -306,12 +441,61 @@ export default function TollPayment() {
     return Boolean(row?.rating || row?.review)
   }, [transaction?.checkoutRequestID, paymentHistory])
 
-  const handleTollSelect = (toll: { id: string; name: string }) => {
+  const handleTollSelect = (toll: {
+    id: string
+    name: string
+    entryLabel: string
+    exitLabel: string
+  }) => {
+    if (journeyActive) {
+      toast.error('End your current journey before selecting a different toll route')
+      return
+    }
+
     setPaymentData((prev) => ({
       ...prev,
       tollId: toll.id,
       tollName: toll.name,
+      route: {
+        from: paymentMode === 'quick' ? toll.entryLabel : prev.route.from,
+        to: toll.exitLabel,
+      },
     }))
+  }
+
+  const handlePaymentModeChange = (mode: 'quick' | 'live') => {
+    if (mode === paymentMode) return
+
+    if (mode === 'quick' && journeyActive) {
+      stopJourneyTracking()
+      setJourneyActive(false)
+      setJourneyOrigin(null)
+      setTrackedDistanceKm(0)
+      lastJourneyPointRef.current = null
+    }
+
+    setPaymentMode(mode)
+
+    if (mode === 'quick' && paymentData.tollId) {
+      const toll = tolls.find((t) => t.id === paymentData.tollId)
+      if (toll) {
+        setPaymentData((prev) => ({
+          ...prev,
+          route: {
+            from: toll.entryLabel,
+            to: toll.exitLabel,
+          },
+        }))
+      }
+    } else if (mode === 'live') {
+      setPaymentData((prev) => ({
+        ...prev,
+        route: {
+          from: journeyOrigin ? formatCoordsLabel(journeyOrigin) : '',
+          to: tolls.find((t) => t.id === prev.tollId)?.exitLabel || prev.route.to,
+        },
+      }))
+    }
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -393,8 +577,8 @@ export default function TollPayment() {
       toast.error('Please select a toll road')
       return
     }
-    if (!paymentData.distanceKm || Number(paymentData.distanceKm) <= 0) {
-      toast.error('Please enter trip distance in kilometers')
+    if (paymentMode === 'live' && (!journeyOrigin || trackedDistanceKm <= 0)) {
+      toast.error('Start your journey first so we can track the distance you actually cover')
       return
     }
     if (paymentData.paymentMethod === 'mpesa' && !paymentData.phoneNumber) {
@@ -420,14 +604,14 @@ export default function TollPayment() {
         phoneNumber: paymentData.phoneNumber,
         amount: computedAmount,
         accountReference: paymentData.vehicleRegistration || paymentData.tollId,
-        transactionDesc: `${paymentData.tollName} ${paymentData.route.from} -> ${paymentData.route.to} (${paymentData.distanceKm}km)`,
+        transactionDesc: `${paymentData.tollName} ${paymentData.route.from} -> ${paymentData.route.to} (${trackedDistanceLabel}km)`,
         paymentDetails: {
           tollId: paymentData.tollId,
           tollName: paymentData.tollName,
           vehicleRegistration: paymentData.vehicleRegistration,
           routeFrom: paymentData.route.from,
           routeTo: paymentData.route.to,
-          distanceKm: Number(paymentData.distanceKm) || 0,
+          distanceKm: trackedDistanceKm,
         },
       })
 
@@ -508,7 +692,10 @@ export default function TollPayment() {
       <div className="payment-container">
         <div className="payment-header">
           <h1>Pay Toll</h1>
-          <p>Pay quickly with M-Pesa STK Push or record a cash payment</p>
+          <p>
+            Select a toll road and pay the base fee, or track your live journey for distance-based
+            billing
+          </p>
           <p className="muted" style={{ marginTop: 6 }}>
             Signed in as: <strong>{user?.email}</strong>
           </p>
@@ -540,6 +727,84 @@ export default function TollPayment() {
 
           <div className="payment-form">
             <h2>Payment Details</h2>
+
+            <div className="form-group payment-mode-section">
+              <label>How would you like to pay?</label>
+              <div className="payment-method-options">
+                <label className="payment-method-option">
+                  <input
+                    type="radio"
+                    name="paymentMode"
+                    value="quick"
+                    checked={paymentMode === 'quick'}
+                    onChange={() => handlePaymentModeChange('quick')}
+                  />
+                  Quick pay (toll only)
+                </label>
+                <label className="payment-method-option">
+                  <input
+                    type="radio"
+                    name="paymentMode"
+                    value="live"
+                    checked={paymentMode === 'live'}
+                    onChange={() => handlePaymentModeChange('live')}
+                  />
+                  Live journey tracking
+                </label>
+              </div>
+              <p className="payment-mode-hint">
+                {paymentMode === 'quick'
+                  ? 'Pay the base toll fee right away — no GPS or journey start required.'
+                  : 'Start your journey to bill based on the distance you actually drive.'}
+              </p>
+            </div>
+
+            {paymentMode === 'live' ? (
+            <div className="journey-panel">
+              <div className="journey-panel-header">
+                <FaMapMarkerAlt />
+                <div>
+                  <strong>Journey Tracking</strong>
+                  <p>Distance is measured from your live GPS once you start driving — no manual entry.</p>
+                </div>
+              </div>
+
+              <div className="journey-stats">
+                <div className="journey-stat">
+                  <span>Status</span>
+                  <strong>{journeyActive ? 'Tracking live' : 'Not started'}</strong>
+                </div>
+                <div className="journey-stat">
+                  <span>Distance covered</span>
+                  <strong>{trackedDistanceLabel} km</strong>
+                </div>
+                <div className="journey-stat">
+                  <span>Origin</span>
+                  <strong>{journeyOrigin ? formatCoordsLabel(journeyOrigin) : 'Waiting to start'}</strong>
+                </div>
+              </div>
+
+              <div className="journey-actions">
+                {!journeyActive ? (
+                  <button
+                    type="button"
+                    className="btn btnPrimary"
+                    onClick={startJourney}
+                    disabled={!paymentData.tollId || startingJourney}
+                  >
+                    {startingJourney ? 'Getting location…' : 'Start Journey'}
+                  </button>
+                ) : (
+                  <button type="button" className="btn btnDanger" onClick={endJourney}>
+                    End Journey
+                  </button>
+                )}
+              </div>
+
+              {locationError ? <div className="journey-error">{locationError}</div> : null}
+            </div>
+            ) : null}
+
             <form onSubmit={handleSubmit}>
               <div className="form-group">
                 <label>Payment Method</label>
@@ -587,20 +852,6 @@ export default function TollPayment() {
               )}
 
               <div className="form-group">
-                <label>Distance to Cover (km)</label>
-                <input
-                  type="number"
-                  min="1"
-                  step="0.1"
-                  name="distanceKm"
-                  placeholder="e.g 12.5"
-                  value={paymentData.distanceKm}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-
-              <div className="form-group">
                 <label>Vehicle Registration</label>
                 <input
                   type="text"
@@ -613,25 +864,27 @@ export default function TollPayment() {
 
               <div className="form-row">
                 <div className="form-group">
-                  <label>From</label>
+                  <label>{paymentMode === 'live' ? 'From (live start point)' : 'From (toll entry)'}</label>
                   <input
                     type="text"
                     name="route.from"
-                    placeholder="Starting point"
+                    placeholder={
+                      paymentMode === 'live'
+                        ? 'Set automatically when journey starts'
+                        : 'Set when toll route is selected'
+                    }
                     value={paymentData.route.from}
-                    onChange={handleChange}
-                    required
+                    readOnly
                   />
                 </div>
                 <div className="form-group">
-                  <label>To</label>
+                  <label>To (toll exit)</label>
                   <input
                     type="text"
                     name="route.to"
-                    placeholder="Destination"
+                    placeholder="Set when toll route is selected"
                     value={paymentData.route.to}
-                    onChange={handleChange}
-                    required
+                    readOnly
                   />
                 </div>
               </div>
@@ -653,7 +906,9 @@ export default function TollPayment() {
                   <span>Formula:</span>
                   <span>
                     {selectedToll
-                      ? `KES ${selectedToll.baseFee} + (${paymentData.distanceKm || 0} × ${selectedToll.perKm})`
+                      ? paymentMode === 'quick'
+                        ? `KES ${selectedToll.baseFee} base fee (no journey tracking)`
+                        : `KES ${selectedToll.baseFee} + (${trackedDistanceLabel} km × ${selectedToll.perKm})`
                       : 'Select toll road'}
                   </span>
                 </div>

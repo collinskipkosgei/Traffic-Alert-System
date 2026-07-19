@@ -1,7 +1,7 @@
 import axios from 'axios'
 import toast from 'react-hot-toast'
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
+const API_URL = import.meta.env.VITE_API_URL?.replace(/\/+$/, '') || '/api'
 
 const api = axios.create({
   baseURL: API_URL,
@@ -29,6 +29,16 @@ api.interceptors.response.use(
       localStorage.removeItem('tas_token')
       window.location.href = '/login'
       toast.error('Session expired. Please login again.')
+    }
+
+    const url = String(error.config?.url || '')
+    const isBackgroundPing =
+      url.includes('/location/heartbeat') ||
+      url.includes('/location/update') ||
+      url.includes('/location/active')
+
+    if (error.response?.status === 429 && isBackgroundPing) {
+      return Promise.reject(error)
     }
 
     const message = error.response?.data?.message || error.response?.data?.error || 'An error occurred'

@@ -11,6 +11,7 @@ type AuthContextValue = {
   signOut: () => void
   doLogin: (input: { email: string; password: string }) => Promise<void>
   doAdminLogin: (input: { email: string; password: string }) => Promise<void>
+  doUnifiedLogin: (input: { email: string; password: string }) => Promise<'admin' | 'user'>
   doRegister: (input: { email: string; password: string; passwordConfirm: string }) => Promise<void>
 }
 
@@ -61,7 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     sendHeartbeat()
-    const intervalId = window.setInterval(sendHeartbeat, 30000)
+    const intervalId = window.setInterval(sendHeartbeat, 60000)
     const onFocus = () => sendHeartbeat()
     window.addEventListener('focus', onFocus)
 
@@ -102,6 +103,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         localStorage.setItem(LEGACY_TOKEN_KEY, res.token)
         setToken(res.token)
         setUser(res.user)
+      },
+      async doUnifiedLogin(input) {
+        setAuthError(null)
+        let adminError: Error | null = null
+
+        try {
+          const adminRes = await adminLogin(input)
+          localStorage.setItem(TOKEN_KEY, adminRes.token)
+          localStorage.setItem(LEGACY_TOKEN_KEY, adminRes.token)
+          setToken(adminRes.token)
+          setUser(adminRes.user)
+          return 'admin'
+        } catch (err) {
+          adminError = err instanceof Error ? err : new Error('Login failed')
+        }
+
+        try {
+          const userRes = await login(input)
+          localStorage.setItem(TOKEN_KEY, userRes.token)
+          localStorage.setItem(LEGACY_TOKEN_KEY, userRes.token)
+          setToken(userRes.token)
+          setUser(userRes.user)
+          return 'user'
+        } catch (userErr) {
+          const userError = userErr instanceof Error ? userErr : new Error('Login failed')
+          const adminMessage = adminError?.message || ''
+          const userMessage = userError.message
+
+          const message =
+            adminMessage.includes('wrong password') || adminMessage.includes('username')
+              ? adminMessage
+              : userMessage.includes('wrong password') || userMessage.includes('username')
+                ? userMessage
+                : userMessage || adminMessage || 'Login failed'
+
+          setAuthError(message)
+          throw new Error(message)
+        }
       },
       async doRegister(input) {
         setAuthError(null)

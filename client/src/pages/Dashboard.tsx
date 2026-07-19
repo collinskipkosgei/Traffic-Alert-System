@@ -165,8 +165,22 @@ export default function Dashboard() {
     }
 
     load()
+    const activeTimer = window.setInterval(() => {
+      locationService
+        .getActiveDrivers(10)
+        .then((res) => {
+          if (!isMounted) return
+          const rows = (res.data?.activeDrivers ?? []) as ActiveDriver[]
+          setActiveDrivers(rows)
+        })
+        .catch(() => {
+          // ignore polling errors
+        })
+    }, 20000)
+
     return () => {
       isMounted = false
+      window.clearInterval(activeTimer)
     }
   }, [user?.email])
 
@@ -518,19 +532,31 @@ export default function Dashboard() {
 
   return (
     <div>
-      <div className="grid2">
-        <div className="card">
+      <div className="grid4">
+        <div className="card kpi-card card--flat">
           <div className="muted">System Status</div>
-          <div className="kpi-number" style={{ marginTop: 8 }}>
+          <div className="kpi-number" style={{ marginTop: 8, textTransform: 'capitalize' }}>
             {health ?? '...'}
           </div>
         </div>
-        <div className="card">
+        <div className="card kpi-card card--flat">
           <div className="muted">Total Alerts</div>
           <div className="kpi-number" style={{ marginTop: 8 }}>
             {alerts.length}
           </div>
-          <div className="kpi-trend">{totalsTrend >= 0 ? 'up' : 'down'} {Math.abs(totalsTrend)} vs yesterday</div>
+          <div className="kpi-trend">{totalsTrend >= 0 ? '↑' : '↓'} {Math.abs(totalsTrend)} vs yesterday</div>
+        </div>
+        <div className="card kpi-card card--flat">
+          <div className="muted">Active Drivers</div>
+          <div className="kpi-number" style={{ marginTop: 8 }}>
+            {activeDrivers.length}
+          </div>
+        </div>
+        <div className="card kpi-card card--flat">
+          <div className="muted">Road Condition</div>
+          <div className="kpi-number" style={{ marginTop: 8, fontSize: 28 }}>
+            {roadCondition}
+          </div>
         </div>
       </div>
 
@@ -688,6 +714,19 @@ export default function Dashboard() {
                 </CircleMarker>
               ))}
 
+              {activeDrivers.map((d) => (
+                <CircleMarker
+                  key={`driver-${d.userId}`}
+                  center={[d.latitude, d.longitude]}
+                  radius={6}
+                  pathOptions={{ color: '#0ea5e9', fillColor: '#0ea5e9', fillOpacity: 0.9 }}
+                >
+                  <Popup>
+                    Active driver near {inferCity(d.latitude, d.longitude)}
+                  </Popup>
+                </CircleMarker>
+              ))}
+
               {safeRoutePoints ? (
                 <Polyline positions={safeRoutePoints} pathOptions={{ color: '#16a34a', weight: 4 }} />
               ) : null}
@@ -752,23 +791,6 @@ export default function Dashboard() {
           </div>
         </div>
 
-          <div className="card">
-            <div className="section-title">Latest Alert</div>
-            {latest ? (
-              <>
-                <div style={{ marginTop: 8, fontWeight: 900 }}>{latest.title}</div>
-                <div className="muted" style={{ marginTop: 4 }}>
-                  {latest.location} • {latest.severity.toUpperCase()} • {new Date(latest.createdAt).toLocaleString()}
-                  {latest.expiresAt ? ` • ${formatMinutesRemaining(latest.expiresAt)}` : ''}
-                </div>
-                <div style={{ marginTop: 10 }}>{latest.description}</div>
-              </>
-            ) : (
-              <div className="muted" style={{ marginTop: 8 }}>
-                No alerts yet. Add one from `Traffic Alerts`.
-              </div>
-            )}
-          </div>
         </div>
 
         <div className="dashboard-right-col">
@@ -784,11 +806,13 @@ export default function Dashboard() {
             {activeDrivers.length === 0 ? <div className="muted">No active drivers right now.</div> : null}
           </div>
           <div className="row" style={{ marginTop: 12 }}>
-            <button className="btn" type="button" onClick={() => setShowBroadcastModal(true)}>
-              Message all
-            </button>
-            <button className="btn" type="button" onClick={() => navigate('/admin/active-drivers')}>
-              View leaderboard
+            {user?.role === 'admin' ? (
+              <button className="btn" type="button" onClick={() => setShowBroadcastModal(true)}>
+                Message all
+              </button>
+            ) : null}
+            <button className="btn" type="button" onClick={() => navigate('/active-drivers')}>
+              View on map
             </button>
           </div>
         </div>
@@ -904,12 +928,15 @@ export default function Dashboard() {
           </div>
         </div>
 
-          <div className="card">
+          <div className="card sosCard">
             <div className="section-title">Emergency / SOS</div>
-          <button className="btn btnDanger" type="button" style={{ marginTop: 10 }} onClick={sendSOS}>
-            Emergency SOS
-          </button>
-        </div>
+            <p className="muted" style={{ marginTop: 6, fontSize: 13 }}>
+              Send an immediate alert with your current location.
+            </p>
+            <button className="btn btnDanger" type="button" style={{ marginTop: 10, width: '100%' }} onClick={sendSOS}>
+              Emergency SOS
+            </button>
+          </div>
 
           <div className="card">
             <div className="section-title">Recent Route Suggestions</div>
@@ -981,16 +1008,7 @@ export default function Dashboard() {
 
       {showBroadcastModal && (
         <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.6)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-            padding: 16,
-          }}
+          className="modalOverlay"
           onClick={(e) => {
             if (e.target === e.currentTarget) setShowBroadcastModal(false)
           }}

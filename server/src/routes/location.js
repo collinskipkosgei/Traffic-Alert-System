@@ -1,7 +1,7 @@
 const express = require('express')
 const DriverLocation = require('../models/DriverLocation')
 const BroadcastMessage = require('../models/BroadcastMessage')
-const { requireAuth, requireAdmin } = require('../middleware/auth')
+const { requireAuth } = require('../middleware/auth')
 
 const router = express.Router()
 
@@ -125,7 +125,7 @@ router.get('/me/history', requireAuth, async (req, res, next) => {
   }
 })
 
-router.get('/active', requireAdmin, async (req, res, next) => {
+router.get('/active', requireAuth, async (req, res, next) => {
   try {
     const minutes = Math.min(Math.max(Number(req.query.minutes || 10), 1), 120)
     const since = new Date(Date.now() - minutes * 60 * 1000)

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { CircleMarker, MapContainer, Marker, Popup, TileLayer } from 'react-leaflet'
+import { CircleMarker, MapContainer, Popup, TileLayer, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import { locationService } from '../services/api'
 import { getNearbyAlerts, type TrafficAlert } from '../api'
@@ -13,15 +13,134 @@ type Coords = {
   timestamp: number
 }
 
+type MapType = 'street' | 'satellite' | 'dark'
+
+// Component to handle smooth map tracking
+function LocationTracker({ coords, enabled }: { coords: Coords | null; enabled: boolean }) {
+  const map = useMap()
+  const prevCoordsRef = useRef<Coords | null>(null)
+  const [isFollowing, setIsFollowing] = useState(true)
+
+  useEffect(() => {
+    if (!coords || !enabled || !isFollowing) return
+
+    // Check if position changed significantly (more than 5 meters)
+    if (prevCoordsRef.current) {
+      const distance = calculateDistance(
+        prevCoordsRef.current.latitude,
+        prevCoordsRef.current.longitude,
+        coords.latitude,
+        coords.longitude
+      )
+      
+      // Only animate if moved more than 5 meters
+      if (distance < 5) return
+    }
+
+    prevCoordsRef.current = coords
+
+    // Smoothly fly to new position
+    map.flyTo([coords.latitude, coords.longitude], map.getZoom(), {
+      duration: 1.2,
+      easeLinearity: 0.25,
+    })
+  }, [coords, enabled, isFollowing, map])
+
+  // Helper function to calculate distance between two coordinates
+  function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const R = 6371000 // Earth's radius in meters
+    const dLat = (lat2 - lat1) * Math.PI / 180
+    const dLon = (lon2 - lon1) * Math.PI / 180
+    const a = 
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+      Math.sin(dLon/2) * Math.sin(dLon/2)
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
+    return R * c
+  }
+
+  // Keyboard shortcut: Press 'F' to toggle follow mode
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (e.key === 'f' || e.key === 'F') {
+        setIsFollowing(prev => !prev)
+      }
+    }
+    window.addEventListener('keydown', handleKeyPress)
+    return () => window.removeEventListener('keydown', handleKeyPress)
+  }, [])
+
+  return (
+    <div style={{ 
+      position: 'absolute', 
+      bottom: 20, 
+      right: 20, 
+      zIndex: 1000,
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 8
+    }}>
+      <button
+        onClick={() => setIsFollowing(prev => !prev)}
+        style={{
+          padding: '8px 16px',
+          backgroundColor: isFollowing ? '#2563eb' : '#6b7280',
+          color: 'white',
+          border: 'none',
+          borderRadius: 8,
+          cursor: 'pointer',
+          fontWeight: 'bold',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+          fontSize: 14,
+        }}
+      >
+        {isFollowing ? '📍 Following' : '📍 Free View'}
+      </button>
+      <div style={{
+        padding: '6px 12px',
+        backgroundColor: 'rgba(0,0,0,0.7)',
+        color: 'white',
+        borderRadius: 6,
+        fontSize: 12,
+        textAlign: 'center'
+      }}>
+        Press 'F' to toggle
+      </div>
+    </div>
+  )
+}
+
 export default function LiveLocation() {
   const [enabled, setEnabled] = useState(false)
   const [coords, setCoords] = useState<Coords | null>(null)
   const [history, setHistory] = useState<Coords[]>([])
   const [nearbyAlerts, setNearbyAlerts] = useState<TrafficAlert[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [mapType, setMapType] = useState<MapType>('street')
   const watchIdRef = useRef<number | null>(null)
   const lastSavedRef = useRef<number>(0)
   const lastAlertsFetchRef = useRef<number>(0)
+
+  // Get the appropriate tile layer URL based on map type
+  const getTileLayer = () => {
+    switch(mapType) {
+      case 'satellite':
+        return {
+          url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+          attribution: '&copy; <a href="https://www.esri.com/">Esri</a>'
+        }
+      case 'dark':
+        return {
+          url: 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}{r}.png',
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, &copy; CartoDB'
+        }
+      default:
+        return {
+          url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+        }
+    }
+  }
 
   useEffect(() => {
     if (!enabled) {
@@ -71,11 +190,29 @@ export default function LiveLocation() {
     }
   }, [enabled])
 
+  // ========== HEARTBEAT WITH DEBUGGING ==========
   useEffect(() => {
     if (!coords || !enabled) return
+
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') || localStorage.getItem('tas_token') : null
+    if (!token) {
+      setError('Please log in to share live location.')
+      setEnabled(false)
+      return
+    }
+
     const now = Date.now()
     if (now - lastSavedRef.current < 7000) return
     lastSavedRef.current = now
+
+    console.log('📤 Sending heartbeat with data:', {
+      latitude: coords.latitude,
+      longitude: coords.longitude,
+      accuracy: coords.accuracy,
+      speed: coords.speed,
+      heading: coords.heading,
+      isActive: true,
+    })
 
     locationService
       .update({
@@ -86,13 +223,24 @@ export default function LiveLocation() {
         heading: coords.heading,
         isActive: true,
       })
-      .catch(() => {
-        // interceptor handles toast; keep UI running
+      .then((res) => {
+        console.log("✅ Heartbeat saved:", res.data)
+      })
+      .catch((err) => {
+        console.error("❌ Heartbeat failed:", err.response?.data || err.message)
+        // Interceptor handles toast; keep UI running
       })
   }, [coords, enabled])
+  // ========== END HEARTBEAT ==========
 
   useEffect(() => {
     if (!coords || !enabled) return
+
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') || localStorage.getItem('tas_token') : null
+    if (!token) {
+      return
+    }
+
     const now = Date.now()
     if (now - lastAlertsFetchRef.current < 12000) return
     lastAlertsFetchRef.current = now
@@ -109,6 +257,12 @@ export default function LiveLocation() {
   }, [coords, enabled])
 
   useEffect(() => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') || localStorage.getItem('tas_token') : null
+    if (!token) {
+      setHistory([])
+      return
+    }
+
     locationService
       .getMyHistory(15)
       .then((res) => {
@@ -140,6 +294,8 @@ export default function LiveLocation() {
     if (!coords) return null
     return `https://www.google.com/maps?q=${coords.latitude},${coords.longitude}`
   }, [coords])
+
+  const tileLayer = getTileLayer()
 
   return (
     <div>
@@ -206,46 +362,130 @@ export default function LiveLocation() {
       </div>
 
       <div style={{ marginTop: 14 }} className="card">
-        <div className="muted" style={{ marginBottom: 10 }}>
-          Map View - Current Location & Nearby Traffic Alerts
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+          <div className="muted">Map View - Current Location & Nearby Traffic Alerts</div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={() => setMapType('street')}
+              style={{
+                padding: '6px 12px',
+                backgroundColor: mapType === 'street' ? '#2563eb' : '#374151',
+                color: 'white',
+                border: 'none',
+                borderRadius: 6,
+                cursor: 'pointer',
+                fontSize: 12,
+                fontWeight: mapType === 'street' ? 'bold' : 'normal',
+              }}
+            >
+              🗺️ Street
+            </button>
+            <button
+              onClick={() => setMapType('satellite')}
+              style={{
+                padding: '6px 12px',
+                backgroundColor: mapType === 'satellite' ? '#2563eb' : '#374151',
+                color: 'white',
+                border: 'none',
+                borderRadius: 6,
+                cursor: 'pointer',
+                fontSize: 12,
+                fontWeight: mapType === 'satellite' ? 'bold' : 'normal',
+              }}
+            >
+              🛰️ Satellite
+            </button>
+            <button
+              onClick={() => setMapType('dark')}
+              style={{
+                padding: '6px 12px',
+                backgroundColor: mapType === 'dark' ? '#2563eb' : '#374151',
+                color: 'white',
+                border: 'none',
+                borderRadius: 6,
+                cursor: 'pointer',
+                fontSize: 12,
+                fontWeight: mapType === 'dark' ? 'bold' : 'normal',
+              }}
+            >
+              🌙 Dark
+            </button>
+          </div>
         </div>
         {coords ? (
-          <MapContainer
-            center={[coords.latitude, coords.longitude]}
-            zoom={15}
-            style={{ height: 320, width: '100%', borderRadius: 12 }}
-          >
-            <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
-            <CircleMarker center={[coords.latitude, coords.longitude]} radius={10} pathOptions={{ color: '#2563eb' }}>
-              <Popup>Your current location</Popup>
-            </CircleMarker>
-            {nearbyAlerts
-              .filter((alert) => alert.latitude != null && alert.longitude != null)
-              .map((alert) => (
-                <CircleMarker
-                  key={alert._id}
-                  center={[alert.latitude!, alert.longitude!]}
-                  radius={8}
-                  pathOptions={{
-                    color: alert.severity === 'high' ? '#dc2626' : alert.severity === 'medium' ? '#f59e0b' : '#10b981',
-                    fillColor: alert.severity === 'high' ? '#dc2626' : alert.severity === 'medium' ? '#f59e0b' : '#10b981',
-                    fillOpacity: 0.8,
-                  }}
-                >
-                  <Popup>
-                    <div style={{ fontWeight: 'bold', marginBottom: 4 }}>{alert.title}</div>
-                    <div style={{ marginBottom: 4 }}>{alert.description}</div>
-                    <div style={{ fontSize: '12px', color: '#666' }}>
-                      {alert.location} • {alert.severity.toUpperCase()}
-                      {alert.distanceKm != null && ` • ${alert.distanceKm.toFixed(1)} km away`}
+          <div style={{ position: 'relative' }}>
+            <MapContainer
+              key={mapType} // Force re-render when map type changes
+              center={[coords.latitude, coords.longitude]}
+              zoom={15}
+              style={{ height: 400, width: '100%', borderRadius: 12 }}
+            >
+              <TileLayer
+                attribution={tileLayer.attribution}
+                url={tileLayer.url}
+              />
+              
+              {/* Smooth Location Tracker */}
+              <LocationTracker coords={coords} enabled={enabled} />
+              
+              {/* Current Location Marker */}
+              <CircleMarker 
+                center={[coords.latitude, coords.longitude]} 
+                radius={10} 
+                pathOptions={{ color: '#2563eb', fillColor: '#2563eb', fillOpacity: 1 }}
+              >
+                <Popup>
+                  <div style={{ fontWeight: 'bold' }}>Your current location</div>
+                  <div style={{ fontSize: 12, color: '#666' }}>
+                    {coords.latitude.toFixed(6)}, {coords.longitude.toFixed(6)}
+                  </div>
+                  {coords.speed != null && (
+                    <div style={{ fontSize: 12, color: '#666' }}>
+                      Speed: {coords.speed.toFixed(2)} m/s
                     </div>
-                  </Popup>
-                </CircleMarker>
-              ))}
-          </MapContainer>
+                  )}
+                </Popup>
+              </CircleMarker>
+              
+              {/* Accuracy Circle */}
+              {coords.accuracy && coords.accuracy < 100 && (
+                <CircleMarker
+                  center={[coords.latitude, coords.longitude]}
+                  radius={coords.accuracy}
+                  pathOptions={{ 
+                    color: 'rgba(37, 99, 235, 0.2)',
+                    fillColor: 'rgba(37, 99, 235, 0.1)',
+                    fillOpacity: 0.3,
+                  }}
+                />
+              )}
+              
+              {/* Nearby Traffic Alerts */}
+              {nearbyAlerts
+                .filter((alert) => alert.latitude != null && alert.longitude != null)
+                .map((alert) => (
+                  <CircleMarker
+                    key={alert._id}
+                    center={[alert.latitude!, alert.longitude!]}
+                    radius={8}
+                    pathOptions={{
+                      color: alert.severity === 'high' ? '#dc2626' : alert.severity === 'medium' ? '#f59e0b' : '#10b981',
+                      fillColor: alert.severity === 'high' ? '#dc2626' : alert.severity === 'medium' ? '#f59e0b' : '#10b981',
+                      fillOpacity: 0.8,
+                    }}
+                  >
+                    <Popup>
+                      <div style={{ fontWeight: 'bold', marginBottom: 4 }}>{alert.title}</div>
+                      <div style={{ marginBottom: 4 }}>{alert.description}</div>
+                      <div style={{ fontSize: '12px', color: '#666' }}>
+                        {alert.location} • {alert.severity.toUpperCase()}
+                        {alert.distanceKm != null && ` • ${alert.distanceKm.toFixed(1)} km away`}
+                      </div>
+                    </Popup>
+                  </CircleMarker>
+                ))}
+            </MapContainer>
+          </div>
         ) : (
           <div className="muted">Turn on location to show map preview.</div>
         )}
@@ -309,4 +549,3 @@ export default function LiveLocation() {
     </div>
   )
 }
-

@@ -1,18 +1,77 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import {
+  CircleMarker,
+  MapContainer,
+  Polyline,
+  Popup,
+  TileLayer,
+  useMap,
+  useMapEvents,
+} from 'react-leaflet'
+import type { LatLngBoundsExpression, LatLngExpression } from 'leaflet'
+import 'leaflet/dist/leaflet.css'
 import { locationService } from '../services/api'
+import { useLiveLocation } from '../hooks/useLiveLocation'
+import { formatCoordsLabel } from '../utils/geo'
+import { getMapTileLayer, type MapStyle } from '../utils/mapTiles'
+import { fetchRoadRoutes, type RoadRoute } from '../utils/osrm'
 
 type Preference = 'cheapest' | 'fastest'
+type RouteView = 'free' | 'toll' | 'both'
+
 const RECENT_ROUTES_KEY = 'tas_recent_route_suggestions_v1'
+const DEFAULT_CENTER: LatLngExpression = [-1.2921, 36.8219]
+
+function MapRecenter({ center, zoom }: { center: LatLngExpression; zoom: number }) {
+  const map = useMap()
+  useEffect(() => {
+    map.setView(center, zoom, { animate: true })
+  }, [center, zoom, map])
+  return null
+}
+
+function MapFitBounds({ bounds }: { bounds: LatLngBoundsExpression | null }) {
+  const map = useMap()
+  useEffect(() => {
+    if (!bounds) return
+    map.fitBounds(bounds, { padding: [48, 48], animate: true })
+  }, [bounds, map])
+  return null
+}
+
+function DestinationPicker({ onPick }: { onPick: (lat: number, lng: number) => void }) {
+  useMapEvents({
+    click(event) {
+      onPick(event.latlng.lat, event.latlng.lng)
+    },
+  })
+  return null
+}
+
+function pickFreeRoute(primary: RoadRoute, alternatives: RoadRoute[]): RoadRoute {
+  if (!alternatives.length) return primary
+  return [...alternatives, primary].reduce((longest, route) =>
+    route.distanceKm > longest.distanceKm ? route : longest,
+  )
+}
+
+function pickTollRoute(primary: RoadRoute, alternatives: RoadRoute[]): RoadRoute {
+  if (!alternatives.length) return primary
+  return [primary, ...alternatives].reduce((fastest, route) =>
+    route.durationMinutes < fastest.durationMinutes ? route : fastest,
+  )
+}
 
 export default function RouteSuggestions() {
-  const [destinationLat, setDestinationLat] = useState('')
-  const [destinationLng, setDestinationLng] = useState('')
+  const { coords: liveCoords, error: liveError, loading: liveLoading } = useLiveLocation(true)
+  const [destination, setDestination] = useState<{ latitude: number; longitude: number } | null>(null)
   const [preference, setPreference] = useState<Preference>('fastest')
+  const [mapStyle, setMapStyle] = useState<MapStyle>('street')
+  const [routeView, setRouteView] = useState<RouteView>('both')
   const [loading, setLoading] = useState(false)
-  const [originLoading, setOriginLoading] = useState(false)
-  const [originStatus, setOriginStatus] = useState<string>('Not set')
-  const [manualOrigin, setManualOrigin] = useState<{ latitude: number; longitude: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [freeRoute, setFreeRoute] = useState<RoadRoute | null>(null)
+  const [tollRoute, setTollRoute] = useState<RoadRoute | null>(null)
   const [result, setResult] = useState<{
     distanceKm: number
     recommendation: 'free' | 'toll'
@@ -23,78 +82,100 @@ export default function RouteSuggestions() {
     }
   } | null>(null)
 
-  async function getBrowserLocation(): Promise<{ latitude: number; longitude: number } | null> {
-    if (!('geolocation' in navigator)) return null
-    return new Promise((resolve) => {
-      navigator.geolocation.getCurrentPosition(
-        (pos) =>
-          resolve({
-            latitude: pos.coords.latitude,
-            longitude: pos.coords.longitude,
-          }),
-        () => resolve(null),
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 },
-      )
-    })
-  }
+  const tileLayer = getMapTileLayer(mapStyle)
 
-  async function useMyCurrentLocation() {
-    setOriginLoading(true)
-    setError(null)
-    try {
-      const browserOrigin = await getBrowserLocation()
-      if (!browserOrigin) {
-        setOriginStatus('Could not get browser location. Please allow location permission.')
-        return
-      }
+  const mapCenter = useMemo<LatLngExpression>(() => {
+    if (liveCoords) return [liveCoords.latitude, liveCoords.longitude]
+    if (destination) return [destination.latitude, destination.longitude]
+    return DEFAULT_CENTER
+  }, [liveCoords, destination])
 
-      setManualOrigin(browserOrigin)
-      setOriginStatus(
-        `Using browser location: ${browserOrigin.latitude.toFixed(5)}, ${browserOrigin.longitude.toFixed(5)}`,
-      )
+  const previewLine = useMemo<LatLngExpression[]>(() => {
+    if (freeRoute || tollRoute || !liveCoords || !destination) return []
+    return [
+      [liveCoords.latitude, liveCoords.longitude],
+      [destination.latitude, destination.longitude],
+    ]
+  }, [liveCoords, destination, freeRoute, tollRoute])
 
-      await locationService.update({
-        latitude: browserOrigin.latitude,
-        longitude: browserOrigin.longitude,
-        isActive: true,
-      })
-    } finally {
-      setOriginLoading(false)
+  const routeBounds = useMemo<LatLngBoundsExpression | null>(() => {
+    const points: [number, number][] = []
+    if (freeRoute && (routeView === 'free' || routeView === 'both')) {
+      points.push(...freeRoute.geometry)
     }
+    if (tollRoute && (routeView === 'toll' || routeView === 'both')) {
+      points.push(...tollRoute.geometry)
+    }
+    if (!points.length && liveCoords && destination) {
+      points.push(
+        [liveCoords.latitude, liveCoords.longitude],
+        [destination.latitude, destination.longitude],
+      )
+    }
+    if (!points.length) return null
+    return points as LatLngBoundsExpression
+  }, [freeRoute, tollRoute, routeView, liveCoords, destination])
+
+  const activeSteps = useMemo(() => {
+    if (routeView === 'toll') return tollRoute?.steps ?? []
+    if (routeView === 'free') return freeRoute?.steps ?? []
+    if (result?.recommendation === 'toll') return tollRoute?.steps ?? []
+    return freeRoute?.steps ?? []
+  }, [routeView, freeRoute, tollRoute, result?.recommendation])
+
+  useEffect(() => {
+    if (!liveCoords) return
+    void locationService.update({
+      latitude: liveCoords.latitude,
+      longitude: liveCoords.longitude,
+      isActive: true,
+    })
+  }, [liveCoords?.latitude, liveCoords?.longitude])
+
+  function handleDestinationPick(lat: number, lng: number) {
+    setDestination({ latitude: lat, longitude: lng })
+    setFreeRoute(null)
+    setTollRoute(null)
+    setResult(null)
+    setError(null)
   }
 
   async function optimizeRoute() {
     setError(null)
     setResult(null)
+    setFreeRoute(null)
+    setTollRoute(null)
 
-    const lat = Number(destinationLat)
-    const lng = Number(destinationLng)
-    if (Number.isNaN(lat) || Number.isNaN(lng)) {
-      setError('Enter valid destination latitude and longitude.')
+    if (!liveCoords) {
+      setError('Waiting for your live location. Allow location access and try again.')
+      return
+    }
+    if (!destination) {
+      setError('Tap the map to choose your destination.')
       return
     }
 
     setLoading(true)
     try {
-      const browserOrigin = manualOrigin || (await getBrowserLocation())
-      if (browserOrigin && !manualOrigin) {
-        // Best effort save so optimizer can use persisted origin in future too.
-        await locationService.update({
-          latitude: browserOrigin.latitude,
-          longitude: browserOrigin.longitude,
-          isActive: true,
-        })
-        setOriginStatus(
-          `Using browser location: ${browserOrigin.latitude.toFixed(5)}, ${browserOrigin.longitude.toFixed(5)}`,
-        )
-      }
+      const [roadRoutes, serverRes] = await Promise.all([
+        fetchRoadRoutes(liveCoords, destination),
+        locationService.optimizeRoute({
+          destination,
+          origin: {
+            latitude: liveCoords.latitude,
+            longitude: liveCoords.longitude,
+          },
+          preference,
+        }),
+      ])
 
-      const res = await locationService.optimizeRoute({
-        destination: { latitude: lat, longitude: lng },
-        origin: browserOrigin || undefined,
-        preference,
-      })
-      setResult(res.data)
+      const free = pickFreeRoute(roadRoutes.primary, roadRoutes.alternatives)
+      const toll = pickTollRoute(roadRoutes.primary, roadRoutes.alternatives)
+
+      setFreeRoute(free)
+      setTollRoute(toll)
+      setResult(serverRes.data)
+      setRouteView('both')
 
       const recent = (() => {
         try {
@@ -105,20 +186,19 @@ export default function RouteSuggestions() {
           return []
         }
       })()
+
       const row = {
-        from: res.data?.origin
-          ? `${res.data.origin.latitude.toFixed(4)}, ${res.data.origin.longitude.toFixed(4)}`
-          : 'Current location',
-        to: `${lat.toFixed(4)}, ${lng.toFixed(4)}`,
+        from: formatCoordsLabel(liveCoords),
+        to: formatCoordsLabel(destination),
         estimatedMinutes:
-          res.data?.recommendation === 'toll'
-            ? res.data?.routes?.toll?.etaMinutes
-            : res.data?.routes?.free?.etaMinutes,
+          serverRes.data?.recommendation === 'toll'
+            ? serverRes.data?.routes?.toll?.etaMinutes
+            : serverRes.data?.routes?.free?.etaMinutes,
         tollCostKes:
-          res.data?.recommendation === 'toll'
-            ? res.data?.routes?.toll?.tollCostKes
-            : res.data?.routes?.free?.tollCostKes,
-        recommendation: res.data?.recommendation,
+          serverRes.data?.recommendation === 'toll'
+            ? serverRes.data?.routes?.toll?.tollCostKes
+            : serverRes.data?.routes?.free?.tollCostKes,
+        recommendation: serverRes.data?.recommendation,
         createdAt: new Date().toISOString(),
       }
       localStorage.setItem(RECENT_ROUTES_KEY, JSON.stringify([row, ...recent].slice(0, 8)))
@@ -137,32 +217,127 @@ export default function RouteSuggestions() {
 
   return (
     <div>
-      <div className="card">
-        <div className="muted" style={{ fontWeight: 800 }}>
-          Route Optimization from Live Location
-        </div>
-        <div style={{ marginTop: 12 }} className="grid2">
-          <label className="field">
-            <span className="muted">Destination Latitude</span>
-            <input
-              value={destinationLat}
-              onChange={(e) => setDestinationLat(e.target.value)}
-              placeholder="-1.2921"
-            />
-          </label>
-          <label className="field">
-            <span className="muted">Destination Longitude</span>
-            <input
-              value={destinationLng}
-              onChange={(e) => setDestinationLng(e.target.value)}
-              placeholder="36.8219"
-            />
-          </label>
+      <div className="card route-map-card">
+        <div className="route-map-header">
+          <div>
+            <div className="section-title">Plan Your Route</div>
+            <p className="muted route-map-subtitle">
+              Your live location is the starting point. Tap the map to set your destination, then
+              optimize to see real roads and turn-by-turn directions.
+            </p>
+          </div>
+          <div className="route-map-legend">
+            <span className="route-legend-item route-legend-item--origin">You are here</span>
+            <span className="route-legend-item route-legend-item--dest">Destination</span>
+            <span className="route-legend-item route-legend-item--free">Free route</span>
+            <span className="route-legend-item route-legend-item--toll">Toll route</span>
+          </div>
         </div>
 
-        <div style={{ height: 12 }} />
+        <div className="route-map-wrap">
+          <div className="route-map-style-switch">
+            <button
+              type="button"
+              className={mapStyle === 'street' ? 'active' : ''}
+              onClick={() => setMapStyle('street')}
+            >
+              Street
+            </button>
+            <button
+              type="button"
+              className={mapStyle === 'satellite' ? 'active' : ''}
+              onClick={() => setMapStyle('satellite')}
+            >
+              Satellite
+            </button>
+            <button
+              type="button"
+              className={mapStyle === 'dark' ? 'active' : ''}
+              onClick={() => setMapStyle('dark')}
+            >
+              Dark
+            </button>
+          </div>
 
-        <div className="grid2">
+          <MapContainer center={mapCenter} zoom={13} className="route-map">
+            <TileLayer key={mapStyle} attribution={tileLayer.attribution} url={tileLayer.url} />
+            <MapRecenter center={mapCenter} zoom={liveCoords ? 14 : 13} />
+            <MapFitBounds bounds={routeBounds} />
+            <DestinationPicker onPick={handleDestinationPick} />
+
+            {liveCoords ? (
+              <CircleMarker
+                center={[liveCoords.latitude, liveCoords.longitude]}
+                radius={10}
+                pathOptions={{ color: '#2563eb', fillColor: '#2563eb', fillOpacity: 0.85, weight: 2 }}
+              >
+                <Popup>
+                  <strong>Your live location</strong>
+                  <br />
+                  {formatCoordsLabel(liveCoords)}
+                  {liveCoords.accuracy ? (
+                    <>
+                      <br />
+                      Accuracy: ~{Math.round(liveCoords.accuracy)}m
+                    </>
+                  ) : null}
+                </Popup>
+              </CircleMarker>
+            ) : null}
+
+            {destination ? (
+              <CircleMarker
+                center={[destination.latitude, destination.longitude]}
+                radius={10}
+                pathOptions={{ color: '#dc2626', fillColor: '#dc2626', fillOpacity: 0.85, weight: 2 }}
+              >
+                <Popup>
+                  <strong>Destination</strong>
+                  <br />
+                  {formatCoordsLabel(destination)}
+                </Popup>
+              </CircleMarker>
+            ) : null}
+
+            {previewLine.length === 2 ? (
+              <Polyline
+                positions={previewLine}
+                pathOptions={{ color: '#94a3b8', weight: 3, opacity: 0.45, dashArray: '8 8' }}
+              />
+            ) : null}
+
+            {freeRoute && (routeView === 'free' || routeView === 'both') ? (
+              <Polyline
+                positions={freeRoute.geometry}
+                pathOptions={{ color: '#16a34a', weight: 5, opacity: routeView === 'both' ? 0.75 : 0.9 }}
+              />
+            ) : null}
+
+            {tollRoute && (routeView === 'toll' || routeView === 'both') ? (
+              <Polyline
+                positions={tollRoute.geometry}
+                pathOptions={{ color: '#2563eb', weight: 5, opacity: routeView === 'both' ? 0.75 : 0.9 }}
+              />
+            ) : null}
+          </MapContainer>
+        </div>
+
+        <div className="route-map-status">
+          {liveLoading ? (
+            <span className="muted">Locating you…</span>
+          ) : liveCoords ? (
+            <span className="route-status-live">Live origin: {formatCoordsLabel(liveCoords)}</span>
+          ) : (
+            <span className="route-status-error">{liveError || 'Location unavailable'}</span>
+          )}
+          {destination ? (
+            <span className="muted">Destination: {formatCoordsLabel(destination)}</span>
+          ) : (
+            <span className="muted">Tap the map to pick a destination</span>
+          )}
+        </div>
+
+        <div className="route-map-controls">
           <label className="field">
             <span className="muted">Preference</span>
             <select value={preference} onChange={(e) => setPreference(e.target.value as Preference)}>
@@ -170,25 +345,29 @@ export default function RouteSuggestions() {
               <option value="cheapest">Cheapest route</option>
             </select>
           </label>
-          <div className="field">
-            <span className="muted">Note</span>
-            <div className="muted">
-              Uses your latest live location as origin. If missing, it will request browser location.
-            </div>
-          </div>
-        </div>
-        <div style={{ height: 12 }} />
-        <div className="row">
-          <button className="btn" type="button" onClick={useMyCurrentLocation} disabled={originLoading}>
-            {originLoading ? 'Locating...' : 'Use My Current Location'}
+
+          {freeRoute || tollRoute ? (
+            <label className="field">
+              <span className="muted">Show on map</span>
+              <select value={routeView} onChange={(e) => setRouteView(e.target.value as RouteView)}>
+                <option value="both">Both routes</option>
+                <option value="free">Free route only</option>
+                <option value="toll">Toll route only</option>
+              </select>
+            </label>
+          ) : null}
+
+          <button
+            className="btn btnPrimary"
+            type="button"
+            onClick={optimizeRoute}
+            disabled={loading || !liveCoords || !destination}
+          >
+            {loading ? 'Optimizing…' : 'Optimize Route'}
           </button>
-          <div className="muted">{originStatus}</div>
         </div>
-        <div style={{ height: 12 }} />
-        <button className="btn" type="button" onClick={optimizeRoute} disabled={loading}>
-          {loading ? 'Optimizing...' : 'Optimize Route'}
-        </button>
-        {error ? <div style={{ marginTop: 8, color: '#fca5a5', fontWeight: 700 }}>{error}</div> : null}
+
+        {error ? <div className="route-map-error">{error}</div> : null}
       </div>
 
       <div style={{ height: 14 }} />
@@ -199,10 +378,10 @@ export default function RouteSuggestions() {
             Free Route
           </div>
           <div style={{ marginTop: 10, fontSize: 26, fontWeight: 900 }}>
-            {result ? `${result.routes.free.etaMinutes} min` : '—'}
+            {result ? `${result.routes.free.etaMinutes} min` : freeRoute ? `${freeRoute.durationMinutes} min` : '—'}
           </div>
           <div className="muted" style={{ marginTop: 6 }}>
-            No toll cost estimated.
+            {freeRoute ? `${freeRoute.distanceKm} km via regular roads` : 'No toll cost estimated.'}
           </div>
         </div>
 
@@ -211,10 +390,14 @@ export default function RouteSuggestions() {
             Toll Route
           </div>
           <div style={{ marginTop: 10, fontSize: 26, fontWeight: 900 }}>
-            {result ? `${result.routes.toll.etaMinutes} min` : '—'}
+            {result ? `${result.routes.toll.etaMinutes} min` : tollRoute ? `${tollRoute.durationMinutes} min` : '—'}
           </div>
           <div className="muted" style={{ marginTop: 6 }}>
-            Toll cost: {result ? `KES ${result.routes.toll.tollCostKes}` : '—'}
+            {result
+              ? `Toll cost: KES ${result.routes.toll.tollCostKes}`
+              : tollRoute
+                ? `${tollRoute.distanceKm} km via fastest roads`
+                : '—'}
           </div>
         </div>
       </div>
@@ -231,44 +414,34 @@ export default function RouteSuggestions() {
             Distance: {result.distanceKm} km • Based on preference:{' '}
             {preference === 'fastest' ? 'fastest' : 'cheapest'}.
           </div>
-          {result.origin ? (
-            <div className="muted" style={{ marginTop: 6 }}>
-              Origin used: {result.origin.latitude.toFixed(5)}, {result.origin.longitude.toFixed(5)}
+        </div>
+      ) : null}
+
+      {activeSteps.length > 0 ? (
+        <div style={{ marginTop: 14 }} className="card route-steps-card">
+          <div className="route-steps-header">
+            <div>
+              <div className="section-title">Road Directions</div>
+              <p className="muted route-map-subtitle">
+                Turn-by-turn suggestions using real road names from the map network.
+              </p>
             </div>
-          ) : null}
+          </div>
+          <ol className="route-steps-list">
+            {activeSteps.map((step, index) => (
+              <li key={`${step.instruction}-${index}`} className="route-step-item">
+                <div className="route-step-index">{index + 1}</div>
+                <div>
+                  <strong>{step.instruction}</strong>
+                  <div className="muted route-step-meta">
+                    {step.distanceKm} km • ~{step.durationMinutes} min
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ol>
         </div>
       ) : null}
     </div>
   )
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

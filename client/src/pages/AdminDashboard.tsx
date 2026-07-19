@@ -27,10 +27,10 @@ type Tab = 'overview' | 'incidents' | 'users' | 'payments' | 'settings'
 
 function StatCard({ label, value, icon, color = '#2563eb' }: { label: string; value: string | number; icon: string; color?: string }) {
   return (
-    <div className="card" style={{ padding: 20, textAlign: 'center' }}>
-      <div style={{ fontSize: 28, marginBottom: 8 }}>{icon}</div>
-      <div style={{ fontSize: 32, fontWeight: 700, marginBottom: 4, color }}>{value}</div>
-      <div style={{ color: '#6c757d', fontSize: 14 }}>{label}</div>
+    <div className="card card--flat" style={{ padding: 20, textAlign: 'center' }}>
+      <div className="statCardIcon" style={{ background: `${color}18`, color }}>{icon}</div>
+      <div style={{ fontSize: 28, fontWeight: 800, marginBottom: 4, color }}>{value}</div>
+      <div className="muted" style={{ fontSize: 13, fontWeight: 600 }}>{label}</div>
     </div>
   )
 }
@@ -281,16 +281,11 @@ export default function AdminDashboard() {
   const tabBtn = (key: Tab, label: string, badge?: number) => (
     <button
       key={key}
-      className="btn"
+      type="button"
+      className={`adminTab${tab === key ? ' active' : ''}`}
       onClick={() => setTab(key)}
-      style={{
-        background: tab === key ? '#2563eb' : 'transparent',
-        color: tab === key ? '#fff' : '#93c5fd',
-        border: '1px solid #2563eb',
-        marginRight: 8,
-      }}
     >
-      {label}{badge !== undefined && badge > 0 && ` (${badge})`}
+      {label}{badge !== undefined && badge > 0 ? ` (${badge})` : ''}
     </button>
   )
 
@@ -304,12 +299,11 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div style={{ padding: 24, maxWidth: 1400 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <h1 style={{ margin: 0 }}>Admin Dashboard</h1>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn" onClick={() => navigate('/admin/active-drivers')}>View Live Map →</button>
-          <button className="btn" onClick={loadAll}>↻ Refresh</button>
+    <div style={{ maxWidth: 1400 }}>
+      <div className="row" style={{ justifyContent: 'space-between', marginBottom: 20 }}>
+        <div className="row" style={{ gap: 8 }}>
+          <button className="btn" type="button" onClick={() => navigate('/admin/active-drivers')}>View Live Map</button>
+          <button className="btn" type="button" onClick={loadAll}>Refresh</button>
         </div>
       </div>
 
@@ -334,11 +328,11 @@ export default function AdminDashboard() {
       </div>
 
       {/* Tabs */}
-      <div style={{ marginBottom: 24 }}>
+      <div className="adminTabs">
         {tabBtn('overview', 'Overview')}
         {tabBtn('incidents', 'Incidents', stats?.pendingAlerts)}
         {tabBtn('users', 'Users', stats?.totalUsers)}
-        {tabBtn('payments', 'Payment Reports')}
+        {tabBtn('payments', 'Payments')}
         {tabBtn('settings', 'Settings')}
       </div>
 
@@ -349,12 +343,12 @@ export default function AdminDashboard() {
           <div style={{ gridColumn: '1 / 3', display: 'flex', flexDirection: 'column', gap: 20 }}>
             {/* Stat Cards */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
-              <StatCard label="Total Incidents" value={stats.totalAlerts} icon="⚠️" />
-              <StatCard label="Pending" value={stats.pendingAlerts} icon="📝" color="#f59e0b" />
-              <StatCard label="Today" value={stats.todayAlerts} icon="📅" />
-              <StatCard label="This Week" value={stats.weekAlerts} icon="📊" />
-              <StatCard label="Total Users" value={stats.totalUsers} icon="👥" />
-              <StatCard label="Active Users" value={stats.activeUsers} icon="✅" color="#22c55e" />
+              <StatCard label="Total Incidents" value={stats.totalAlerts} icon="!" color="#2563eb" />
+              <StatCard label="Pending" value={stats.pendingAlerts} icon="⏳" color="#f59e0b" />
+              <StatCard label="Today" value={stats.todayAlerts} icon="◉" color="#2563eb" />
+              <StatCard label="This Week" value={stats.weekAlerts} icon="▤" color="#2563eb" />
+              <StatCard label="Total Users" value={stats.totalUsers} icon="◎" color="#7c3aed" />
+              <StatCard label="Active Users" value={stats.activeUsers} icon="✓" color="#22c55e" />
             </div>
 
             {/* Charts Row */}
