@@ -199,6 +199,20 @@ app.use((req, res, next) => {
   next();
 });
 
+// ========== ENSURE DB CONNECTION (serverless-safe) ==========
+// Vercel imports this file as a module rather than executing it directly,
+// so connectDB() must be guaranteed to run per-request rather than only
+// inside startServer(). This awaits/reuses a cached connection.
+app.use('/api', async (req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (err) {
+    console.error('❌ DB connection middleware failed:', err.message);
+    res.status(503).json({ error: 'Database unavailable', message: err.message });
+  }
+});
+
 app.get('/', (_req, res) => {
   res.json({ 
     message: 'Traffic Alert System API with M-Pesa',
@@ -488,7 +502,7 @@ app.get('/api/health', async (req, res) => {
   });
 });
 
-// ========== START SERVER ==========
+// ========== START SERVER (local dev only) ==========
 const startServer = async () => {
   try {
     console.log("🔄 Connecting to MongoDB...");
